@@ -13,8 +13,12 @@ for path in (ROOT_DIR, APP_DIR):
 
 import streamlit as st
 
-from components.layout import render_top_nav, get_logo_bytes
-from services.data_utils import load_enriched_data
+try:
+    from frontend.streamlit_app.components.layout import render_top_nav, get_logo_bytes
+    from frontend.streamlit_app.services.data_utils import load_enriched_data
+except ModuleNotFoundError:
+    from components.layout import render_top_nav, get_logo_bytes
+    from services.data_utils import load_enriched_data
 
 st.set_page_config(page_title="Refuel Control Center", page_icon="🏠", layout="wide")
 
