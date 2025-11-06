@@ -84,12 +84,26 @@ st.plotly_chart(elasticity_fig, use_container_width=True)
 expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity * (1 + promo_boost / 100)
 st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
 
-# Simple optimal price heuristic assuming linear margin and no competition
-unit_cost = avg_price * 0.6
-margins = (price_points - unit_cost) * demand_curve
-optimal_idx = np.argmax(margins)
+st.subheader("Profit maximizer")
+unit_cost = st.number_input("Unit cost (€)", min_value=0.1, value=round(avg_price * 0.6, 2), step=0.1)
+operating_fee = st.slider("Per-transaction fee (€)", 0.0, 2.0, 0.2, step=0.1)
+margin_curve = (price_points - unit_cost - operating_fee) * demand_curve
+optimal_idx = int(np.argmax(margin_curve))
 optimal_price = price_points[optimal_idx]
-st.success(f"Optimal theoretical price (zero competition assumption): €{optimal_price:.2f}")
+optimal_units = demand_curve[optimal_idx]
+optimal_profit = margin_curve[optimal_idx]
+st.write(
+    f"At €{optimal_price:.2f}, expected demand is {optimal_units:.0f} units and projected profit is €{optimal_profit:.0f} / period."
+)
+profit_fig = px.line(
+    x=price_points,
+    y=margin_curve,
+    labels={"x": "Price (€)", "y": "Profit"},
+    title="Profit vs. price",
+)
+profit_fig.add_vline(x=optimal_price, line_dash="dash", line_color="green", annotation_text="Optimal")
+profit_fig.add_vline(x=preferred_price, line_dash="dot", line_color="blue", annotation_text="Test price")
+st.plotly_chart(profit_fig, use_container_width=True)
 
 with col_right:
     current_stock = st.number_input("Current snack stock (units)", min_value=0.0, value=round(avg_units * 5, 1), step=10.0)
