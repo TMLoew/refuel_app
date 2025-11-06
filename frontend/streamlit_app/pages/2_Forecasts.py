@@ -21,7 +21,7 @@ from frontend.streamlit_app.services.data_utils import (
 
 st.set_page_config(page_title="Forecast Explorer", page_icon="🔮", layout="wide")
 
-render_top_nav("2_Forecasts.py")
+render_top_nav("2_Forecasts.py", context="pages")
 st.title("Forecast Explorer")
 st.caption("Dig into the regression models, understand residuals, and inspect sensitivities before committing to a plan.")
 

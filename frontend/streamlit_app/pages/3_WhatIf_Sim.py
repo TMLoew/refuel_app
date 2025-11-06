@@ -20,7 +20,7 @@ from frontend.streamlit_app.services.data_utils import (
 
 st.set_page_config(page_title="What-if Simulator", page_icon="🧪", layout="wide")
 
-render_top_nav("3_WhatIf_Sim.py")
+render_top_nav("3_WhatIf_Sim.py", context="pages")
 st.title("Scenario Lab")
 st.caption("Stack two competing scenarios, stress test the demand outlook, and quantify the upside/downside.")
 

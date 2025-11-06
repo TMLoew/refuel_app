@@ -14,7 +14,7 @@ from frontend.streamlit_app.services.weather_pipeline import DEFAULT_LAT, DEFAUL
 
 st.set_page_config(page_title="Settings & APIs", page_icon="⚙️", layout="wide")
 
-render_top_nav("5_Settings_APIs.py")
+render_top_nav("5_Settings_APIs.py", context="pages")
 st.title("Settings & API Console")
 st.caption("Manage external data hooks, monitor credentials, and run quick health checks.")
 
