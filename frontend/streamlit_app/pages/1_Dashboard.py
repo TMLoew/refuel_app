@@ -251,7 +251,7 @@ def render_inventory_game(df: pd.DataFrame) -> None:
     current_day = daily_usage.iloc[idx]
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Simulated date", current_day["timestamp"].date())
+    col1.metric("Simulated date", str(current_day["timestamp"].date()))
     col2.metric("Stock level", f"{st.session_state['stock_level']:.0f} units")
     col3.metric("Projected demand", f"{current_day['daily_snacks']:.0f} units")
 

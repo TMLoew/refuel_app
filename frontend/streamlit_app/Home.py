@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import numpy as np
+import pandas as pd
 import plotly.express as px
 
 # Ensure imports work both locally and on Streamlit Cloud
@@ -39,6 +40,14 @@ with st.spinner("Loading telemetry for preview..."):
 if data.empty:
     st.sidebar.error("No telemetry data available yet. Upload a CSV to explore the cockpit.")
     st.stop()
+
+daily_summary = (
+    data.set_index("timestamp")
+    .resample("D")
+    .agg({"checkins": "sum", "snack_units": "sum", "temperature_c": "mean", "snack_price": "mean"})
+    .reset_index()
+)
+daily_summary["date"] = daily_summary["timestamp"].dt.date
 
 total_days = max(1, int((data["timestamp"].max() - data["timestamp"].min()).days) or 1)
 with st.sidebar:
@@ -171,3 +180,58 @@ st.table(
     .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (€)"})
     .style.format({"Avg snack units": "{:.1f}", "Suggested price (€)": "€{:.2f}"})
 )
+
+st.subheader("Auto restock guidance")
+rolling_daily = daily_summary["snack_units"].rolling(7, min_periods=1).mean().iloc[-1]
+auto_stock = st.number_input("Auto-stock level (units)", min_value=0.0, value=current_stock, step=10.0, key="auto-stock")
+auto_lead = st.slider("Auto lead time (days)", 1, 21, lead_time_days, key="auto-lead")
+service_buffer = st.slider("Buffer after delivery (days)", 1, 14, 3, key="auto-buffer")
+days_until_out = auto_stock / max(rolling_daily, 1)
+recommended_order_in = max(0.0, days_until_out - auto_lead)
+recommended_qty = max(0.0, (auto_lead + service_buffer) * rolling_daily - auto_stock)
+col_a, col_b = st.columns(2)
+col_a.metric("Days until stockout", f"{days_until_out:.1f} d")
+col_b.metric("Recommended reorder in", f"{recommended_order_in:.1f} d")
+st.write(
+    f"Order ~**{recommended_qty:.0f} units** to cover lead time + buffer at the current daily run rate of {rolling_daily:.0f} units."
+)
+
+st.subheader("Historic week simulator")
+if daily_summary.empty:
+    st.info("Need daily history to run the simulator.")
+else:
+    dates_sorted = sorted(daily_summary["date"].unique())
+    start_date = st.select_slider("Simulation start date", options=dates_sorted, value=dates_sorted[0])
+    sim_weeks = st.slider("Number of weeks", 1, 12, 4)
+    sim_stock = st.number_input("Simulation starting stock", min_value=0.0, value=current_stock, step=10.0, key="sim-stock")
+    sim_safety = st.number_input("Simulation safety stock", min_value=0.0, value=safety_stock, step=5.0, key="sim-safety")
+    sim_lead = st.slider("Simulation reorder lead (days)", 1, 21, lead_time_days, key="sim-lead")
+    sim_reorder_qty = st.number_input(
+        "Simulation reorder quantity", min_value=0.0, value=reorder_point - safety_stock, step=10.0, key="sim-reorder"
+    )
+    auto_reorder = st.checkbox("Auto reorder when below safety", value=True, key="sim-auto")
+
+    start_idx = daily_summary.index[daily_summary["date"] == start_date][0]
+    total_days_sim = sim_weeks * 7
+    stock = sim_stock
+    sim_rows: List[dict] = []
+    for offset in range(total_days_sim):
+        row = daily_summary.iloc[(start_idx + offset) % len(daily_summary)]
+        stock -= row["snack_units"]
+        reordered = False
+        if auto_reorder and stock <= sim_safety:
+            stock += sim_reorder_qty
+            reordered = True
+        sim_rows.append(
+            {
+                "date": row["date"].isoformat(),
+                "demand": round(row["snack_units"], 1),
+                "stock_after": round(stock, 1),
+                "reordered": "Yes" if reordered else "",
+            }
+        )
+    sim_df = pd.DataFrame(sim_rows)
+    sim_fig = px.line(sim_df, x="date", y="stock_after", title="Simulated stock over historic weeks")
+    sim_fig.add_hline(y=sim_safety, line_dash="dot", line_color="orange", annotation_text="Safety stock")
+    st.plotly_chart(sim_fig, use_container_width=True)
+    st.dataframe(sim_df, use_container_width=True, height=300)
