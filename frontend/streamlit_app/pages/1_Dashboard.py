@@ -264,17 +264,19 @@ def render_inventory_game(df: pd.DataFrame) -> None:
     if st.session_state["stock_level"] <= low_threshold:
         st.warning("Low stock! Consider reordering before the next day.")
 
-        if st.button("Next day ➡️"):
-            st.session_state["stock_level"] -= current_day["daily_snacks"]
-            st.session_state["stock_history"].append(
-                {
-                    "date": current_day["timestamp"].date(),
-                    "stock_end": st.session_state["stock_level"],
-                    "consumption": current_day["daily_snacks"],
-                }
-            )
-            st.session_state["stock_day_idx"] = (idx + 1) % len(daily_usage)
-            st.rerun()
+    if st.button("Next day ➡️"):
+        st.session_state["stock_level"] = max(
+            0.0, st.session_state["stock_level"] - current_day["daily_snacks"]
+        )
+        st.session_state["stock_history"].append(
+            {
+                "date": current_day["timestamp"].date(),
+                "stock_end": st.session_state["stock_level"],
+                "consumption": current_day["daily_snacks"],
+            }
+        )
+        st.session_state["stock_day_idx"] = (idx + 1) % len(daily_usage)
+        st.rerun()
 
     if st.session_state["stock_history"]:
         hist_df = pd.DataFrame(st.session_state["stock_history"])
