@@ -60,11 +60,21 @@ def load_enriched_data(csv_path: Path = DATA_FILE, use_weather_api: bool = False
     if not csv_path.exists():
         return pd.DataFrame()
 
-    df = pd.read_csv(csv_path, parse_dates=["ts_local_naive"])
+    df = pd.read_csv(csv_path)
     if df.empty:
         return df
 
-    df = df.rename(columns={"ts_local_naive": "timestamp"})
+    if "ts_local_naive" in df.columns:
+        timestamp_col = "ts_local_naive"
+    elif "timestamp" in df.columns:
+        timestamp_col = "timestamp"
+    else:
+        raise ValueError(
+            "Expected a timestamp column named 'ts_local_naive' or 'timestamp' in gym_badges.csv."
+        )
+
+    df[timestamp_col] = pd.to_datetime(df[timestamp_col])
+    df = df.rename(columns={timestamp_col: "timestamp"})
     df = df.sort_values("timestamp").reset_index(drop=True)
     df["hour"] = df["timestamp"].dt.hour
     df["weekday"] = df["timestamp"].dt.weekday
