@@ -51,12 +51,16 @@ def render_top_nav(
                 return page
         return None
 
+    theme_host = None
     if logo_bytes:
-        wrapper_cols = st.columns([0.2, 0.8])
+        wrapper_cols = st.columns([0.18, 0.64, 0.18])
         wrapper_cols[0].image(logo_bytes, width=90)
         cols = wrapper_cols[1].columns(len(nav_items))
+        theme_host = wrapper_cols[2]
     else:
-        cols = st.columns(len(nav_items))
+        wrapper_cols = st.columns([0.82, 0.18])
+        cols = wrapper_cols[0].columns(len(nav_items))
+        theme_host = wrapper_cols[1]
 
     for col, item in zip(cols, nav_items):
         page_meta = lookup(item.path)
@@ -69,6 +73,9 @@ def render_top_nav(
             else:
                 if st.button(label, use_container_width=True, key=f"nav-{item.path}"):
                     st.switch_page(item.path)
+
+    if theme_host is not None:
+        _render_theme_toggle(theme_host)
 
 
 LOGO_CANDIDATES = [
@@ -95,6 +102,120 @@ def get_logo_bytes() -> Optional[bytes]:
     if resolved is None:
         return None
     return resolved.read_bytes()
+
+
+DEFAULT_THEME_MODE = "light"
+THEME_CSS = {
+    "light": """
+:root {
+    --bg-color: #f6f8fc;
+    --card-bg: #ffffff;
+    --text-color: #1c2434;
+    --muted-color: #6b7280;
+    --accent-color: #f97316;
+}
+body, .stApp {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+[data-testid="stAppViewContainer"] {
+    background-color: var(--bg-color);
+}
+[data-testid="stHeader"] {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+[data-testid="stSidebar"] {
+    background-color: #ffffff !important;
+    color: var(--text-color);
+}
+section.main > div {
+    background-color: transparent;
+}
+.stMarkdown p, .stMarkdown span, .stMetric, label, h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color) !important;
+}
+.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+    background-color: rgba(249,115,22,0.15);
+    color: var(--text-color);
+}
+.theme-toggle .stRadio > label, .theme-toggle .stRadio div {
+    justify-content: center;
+}
+.theme-toggle .stRadio label {
+    padding-bottom: 4px;
+}
+""",
+    "dark": """
+:root {
+    --bg-color: #0b1120;
+    --card-bg: #111827;
+    --text-color: #f1f5f9;
+    --muted-color: #94a3b8;
+    --accent-color: #f97316;
+}
+body, .stApp {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+[data-testid="stAppViewContainer"] {
+    background-color: var(--bg-color);
+}
+[data-testid="stHeader"] {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+[data-testid="stSidebar"] {
+    background-color: #0f172a !important;
+    color: var(--text-color);
+}
+.stMarkdown p, .stMarkdown span, .stMetric, label, h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color) !important;
+}
+.stTabs [data-baseweb="tab-list"] button {
+    color: var(--muted-color);
+    background-color: rgba(255,255,255,0.05);
+}
+.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+    color: var(--text-color);
+    background-color: rgba(249,115,22,0.15);
+}
+.stDataFrame, .stTable, .stPlotlyChart, .stMetric {
+    background-color: transparent;
+}
+.theme-toggle .stRadio > label, .theme-toggle .stRadio div {
+    justify-content: center;
+}
+""",
+}
+
+
+def apply_theme(mode: str) -> None:
+    css = THEME_CSS.get(mode, THEME_CSS[DEFAULT_THEME_MODE])
+    st.markdown(f"<style id='refuel-theme'>{css}</style>", unsafe_allow_html=True)
+
+
+def _render_theme_toggle(container: st.delta_generator.DeltaGenerator) -> None:
+    mode = st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE)
+    with container:
+        st.markdown(
+            "<div class='theme-toggle' style='text-align:center;'>",
+            unsafe_allow_html=True,
+        )
+        selection = st.radio(
+            "Theme switch",
+            options=("🌞", "🌙"),
+            index=0 if mode == "light" else 1,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="theme-toggle",
+            help="Toggle between light and dark mode",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+    new_mode = "dark" if selection == "🌙" else "light"
+    if new_mode != mode:
+        st.session_state["ui_theme_mode"] = new_mode
+    apply_theme(st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE))
 
 
 def sidebar_info_block() -> None:
