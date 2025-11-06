@@ -2,7 +2,8 @@
 """
 Build a daily product mix for Refuel from gym data + weather.
 Inputs:
-  - data/gym_badges_0630_2200_long.csv (your 15-min gym data)
+  - data/gym_badges_0630_2200_long.csv (15-min gym data)
+  - optional data/weather_stgallen_hourly.csv (pre-synced hourly weather)
 Outputs:
   - data/product_mix_daily.csv (daily plan per product)
 """
@@ -138,13 +139,29 @@ def build_product_mix(
     gym_csv_path: str = "data/gym_badges_0630_2200_long.csv",
     out_csv_path: str = "data/product_mix_daily.csv",
     base_conversion: float = 0.35,  # % of visitors who buy a drink
+    weather_hourly_csv: Optional[str] = "data/weather_stgallen_hourly.csv",
 ) -> str:
     gym = load_gym_daily(gym_csv_path)
     if gym.empty:
         raise RuntimeError("Gym daily aggregation is empty.")
 
     start_date, end_date = min(gym["date"]), max(gym["date"])
-    wx = fetch_daily_weather_range(start_date, end_date)
+    if weather_hourly_csv and Path(weather_hourly_csv).exists():
+        wx_raw = pd.read_csv(weather_hourly_csv, parse_dates=["ts_local"])
+        if wx_raw["ts_local"].dt.tz is None:
+            wx_raw["ts_local"] = pd.to_datetime(wx_raw["ts_local"]).dt.tz_localize("Europe/Zurich")
+        wx = (
+            wx_raw.assign(ts_local=wx_raw["ts_local"].dt.tz_convert("Europe/Zurich").dt.tz_localize(None))
+            .set_index("ts_local")
+            .resample("D")
+            .agg({"temperature_2m": "max", "precipitation": "sum"})
+            .rename(columns={"temperature_2m": "temp_max_c", "precipitation": "precip_mm"})
+            .reset_index()
+        )
+        wx["date"] = wx["ts_local"].dt.date.astype(str)
+        wx = wx.drop(columns=["ts_local"])
+    else:
+        wx = fetch_daily_weather_range(start_date, end_date)
 
     df = gym.merge(wx, on="date", how="left")
     df["season"] = pd.to_datetime(df["date"]).dt.month.map(month_to_season)

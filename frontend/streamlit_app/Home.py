@@ -144,3 +144,30 @@ with col_right:
         st.warning("Stock above safety but heading toward reorder point.")
     else:
         st.success("Stock level healthy. No alert triggered.")
+
+st.subheader("Day-of-week pricing hints")
+dow_stats = (
+    data.groupby("weekday")
+    .agg(checkins=("checkins", "mean"), snack_units=("snack_units", "mean"), price=("snack_price", "mean"))
+    .reset_index()
+)
+dow_stats["weekday_name"] = dow_stats["weekday"].map(dict(enumerate(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])))
+dow_stats["suggested_price"] = (
+    dow_stats["price"]
+    * (dow_stats["snack_units"] / dow_stats["snack_units"].mean()).clip(lower=0.8, upper=1.2)
+)
+
+dow_fig = px.bar(
+    dow_stats,
+    x="weekday_name",
+    y=["snack_units", "checkins"],
+    barmode="group",
+    title="Average demand by weekday",
+    labels={"value": "Average per hour", "variable": ""},
+)
+st.plotly_chart(dow_fig, use_container_width=True)
+st.table(
+    dow_stats[["weekday_name", "snack_units", "suggested_price"]]
+    .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (€)"})
+    .style.format({"Avg snack units": "{:.1f}", "Suggested price (€)": "€{:.2f}"})
+)

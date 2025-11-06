@@ -15,6 +15,15 @@ streamlit run frontend/streamlit_app/Home.py
 
 Drop your gym telemetry CSV into `data/gym_badges.csv`, then toggle “Use live weather API” inside the app to pull Open-Meteo context automatically.
 
+To refresh backend datasets:
+
+```bash
+# Fetch weather aligned with the gym dataset
+python backend/app/services/weather_service.py
+# Rebuild product mix suggestions
+python backend/app/services/pipeline.py
+```
+
 ## Repository Layout
 
 - `frontend/streamlit_app/` – multipage Streamlit app (dashboard, forecast explorer, what-if simulator, data editor, settings)

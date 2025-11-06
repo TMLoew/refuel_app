@@ -22,7 +22,11 @@ from .weather_pipeline import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DATA_FILE = PROJECT_ROOT / "data" / "gym_badges.csv"
+PREFERRED_DATASETS = [
+    PROJECT_ROOT / "data" / "gym_badges_0630_2200_long.csv",
+    PROJECT_ROOT / "data" / "gym_badges.csv",
+]
+DATA_FILE = next((path for path in PREFERRED_DATASETS if path.exists()), PREFERRED_DATASETS[-1])
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},

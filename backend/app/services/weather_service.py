@@ -1,6 +1,7 @@
 # backend/app/services/weather_service.py
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 import pandas as pd
 import requests
 
@@ -39,6 +40,43 @@ def save_latest(hours_back: int = 168) -> str:
     out = "data/weather_stgallen_hourly.csv"
     df.to_csv(out, index=False)
     return out
+
+def fetch_full_range(start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
+    """Chunked fetch across long ranges (Open-Meteo limit ~7 days per call)."""
+    frames = []
+    cursor = start_utc
+    while cursor <= end_utc:
+        chunk_end = min(cursor + timedelta(days=6, hours=23), end_utc)
+        frames.append(fetch_weather_hourly(cursor, chunk_end))
+        cursor = chunk_end + timedelta(hours=1)
+    out = pd.concat(frames, ignore_index=True).drop_duplicates(subset="ts_utc")
+    return out.sort_values("ts_utc").reset_index(drop=True)
+
+
+def sync_weather_to_gym_csv(
+    gym_csv_path: str = "data/gym_badges_0630_2200_long.csv",
+    out_path: str = "data/weather_stgallen_hourly.csv",
+    pad_days: int = 2,
+) -> str:
+    """Align weather file to cover entire gym dataset range."""
+    p = Path(gym_csv_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Gym CSV missing: {gym_csv_path}")
+    first_cols = pd.read_csv(p, nrows=1).columns
+    ts_col = "ts_local" if "ts_local" in first_cols else "ts_local_naive"
+    df = pd.read_csv(p, parse_dates=[ts_col])
+    series = pd.to_datetime(df[ts_col])
+    if series.dt.tz is None:
+        series = series.dt.tz_localize("Europe/Zurich")
+    else:
+        series = series.dt.tz_convert("Europe/Zurich")
+    start = (series.min() - pd.Timedelta(days=pad_days)).tz_convert("UTC")
+    end = (series.max() + pd.Timedelta(days=pad_days)).tz_convert("UTC")
+    weather = fetch_full_range(start, end)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    weather.to_csv(out_path, index=False)
+    return out_path
+
 
 if __name__ == "__main__":
     path = save_latest()
