@@ -134,6 +134,14 @@ section.main > div {
     background-color: rgba(249,115,22,0.15);
     color: var(--text-color);
 }
+.stPlotlyChart {
+    background-color: var(--card-bg) !important;
+    border-radius: 12px;
+    padding: 8px;
+}
+.stPlotlyChart div {
+    background-color: transparent !important;
+}
 .theme-toggle .stRadio > label, .theme-toggle .stRadio div {
     justify-content: center;
 }
@@ -178,6 +186,14 @@ body, .stApp {
 .stDataFrame, .stTable, .stPlotlyChart, .stMetric {
     background-color: transparent;
 }
+.stPlotlyChart {
+    background-color: #0f172a !important;
+    border-radius: 12px;
+    padding: 8px;
+}
+.stPlotlyChart div {
+    background-color: transparent !important;
+}
 .theme-toggle .stRadio > label, .theme-toggle .stRadio div {
     justify-content: center;
 }
@@ -198,14 +214,15 @@ def render_theme_toggle() -> None:
     mode = st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE)
     selection = st.radio(
         "Theme toggle",
-        options=("🌞", "🌙"),
+        options=("light", "dark"),
         index=0 if mode == "light" else 1,
         horizontal=True,
         label_visibility="collapsed",
         key="theme-toggle",
         help="Toggle between light and dark mode",
+        format_func=lambda opt: "🌞" if opt == "light" else "🌙",
     )
-    new_mode = "dark" if selection == "🌙" else "light"
+    new_mode = selection
     if new_mode != mode:
         st.session_state["ui_theme_mode"] = new_mode
     apply_theme(st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE))
@@ -213,9 +230,6 @@ def render_theme_toggle() -> None:
 
 def sidebar_info_block() -> None:
     """Standard sidebar header with team + data refresh details."""
-    logo_bytes = get_logo_bytes()
-    if logo_bytes:
-        st.sidebar.image(logo_bytes, width=120)
     st.sidebar.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
     st.sidebar.caption("Data updated every hour · Last refresh from notebook sync.")
     with st.sidebar:
