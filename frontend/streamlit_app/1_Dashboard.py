@@ -18,6 +18,7 @@ try:
         month_to_season,
         seasonality,
     )
+    from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
 except ModuleNotFoundError:
     import sys
 
@@ -36,6 +37,7 @@ except ModuleNotFoundError:
         month_to_season,
         seasonality,
     )
+    from components.layout import render_top_nav, sidebar_info_block
 
 st.set_page_config(
     page_title="Refuel Ops Dashboard",
@@ -439,13 +441,16 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
 
 
 def render_dashboard() -> None:
+    render_top_nav("1_Dashboard.py")
     st.title("Refuel Performance Cockpit")
     st.caption(
         "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."
     )
 
-    st.sidebar.header("Scenario controls")
-    use_weather_api = st.sidebar.toggle("Use live weather API", value=False)
+    with st.sidebar:
+        sidebar_info_block()
+        st.subheader("Scenario controls")
+        use_weather_api = st.toggle("Use live weather API", value=False)
 
     with st.spinner("Loading telemetry and contextual data..."):
         data = load_enriched_data(DATA_FILE, use_weather_api)
@@ -462,33 +467,38 @@ def render_dashboard() -> None:
 
     models = train_models(data)
 
-    horizon_hours = st.sidebar.slider("Forecast horizon (hours)", min_value=6, max_value=72, value=24, step=6)
-    weather_pattern = st.sidebar.selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()))
-    temp_manual = st.sidebar.slider("Manual temperature shift (°C)", min_value=-8, max_value=8, value=0)
-    precip_manual = st.sidebar.slider("Manual precipitation shift (mm)", min_value=-2.0, max_value=2.0, value=0.0, step=0.1)
-    event_intensity = st.sidebar.slider(
-        "Gym event intensity",
-        min_value=0.2,
-        max_value=2.5,
-        value=1.0,
-        step=0.1,
-        help="Represents corporate challenges or class launches (baseline ~0.5).",
-    )
-    marketing_boost_pct = st.sidebar.slider(
-        "Marketing reach boost (%)",
-        min_value=0,
-        max_value=80,
-        value=10,
-        step=5,
-    )
-    snack_price_change = st.sidebar.slider(
-        "Snack price change (%)",
-        min_value=-30,
-        max_value=40,
-        value=0,
-        step=5,
-    )
-    snack_promo = st.sidebar.selectbox("Snack activation", list(SNACK_PROMOS.keys()))
+    with st.sidebar:
+        with st.expander("Weather & demand levers", expanded=True):
+            horizon_hours = st.slider("Forecast horizon (hours)", min_value=6, max_value=72, value=24, step=6)
+            weather_pattern = st.selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()))
+            temp_manual = st.slider("Manual temperature shift (°C)", min_value=-8, max_value=8, value=0)
+            precip_manual = st.slider(
+                "Manual precipitation shift (mm)", min_value=-2.0, max_value=2.0, value=0.0, step=0.1
+            )
+        with st.expander("Campaign & pricing knobs", expanded=True):
+            event_intensity = st.slider(
+                "Gym event intensity",
+                min_value=0.2,
+                max_value=2.5,
+                value=1.0,
+                step=0.1,
+                help="Represents corporate challenges or class launches (baseline ~0.5).",
+            )
+            marketing_boost_pct = st.slider(
+                "Marketing reach boost (%)",
+                min_value=0,
+                max_value=80,
+                value=10,
+                step=5,
+            )
+            snack_price_change = st.slider(
+                "Snack price change (%)",
+                min_value=-30,
+                max_value=40,
+                value=0,
+                step=5,
+            )
+            snack_promo = st.selectbox("Snack activation", list(SNACK_PROMOS.keys()))
 
     scenario = {
         "horizon_hours": horizon_hours,
