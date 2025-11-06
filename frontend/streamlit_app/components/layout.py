@@ -29,7 +29,11 @@ DEFAULT_NAV: List[NavItem] = [
 ]
 
 
-def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV) -> None:
+def render_top_nav(
+    active_page: str,
+    nav_items: Iterable[NavItem] = DEFAULT_NAV,
+    show_logo: bool = True,
+) -> None:
     """Render a top nav bar that switches pages without opening new tabs."""
     st.markdown(
         "<style>[data-testid='stSidebarNav']{display:none !important;}</style>",
@@ -39,7 +43,7 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
     if ctx is None:
         return
     pages = ctx.pages_manager.get_pages()
-    logo_bytes = get_logo_bytes()
+    logo_bytes = get_logo_bytes() if show_logo else None
 
     def lookup(path: str) -> Optional[dict]:
         for page in pages.values():

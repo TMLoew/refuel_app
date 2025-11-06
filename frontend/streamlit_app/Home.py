@@ -29,10 +29,8 @@ except ModuleNotFoundError:
 PAGE_ICON = get_logo_path() or "🏠"
 st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
 
-render_top_nav("Home.py")
+render_top_nav("Home.py", show_logo=False)
 logo_bytes = get_logo_bytes()
-if logo_bytes:
-    st.image(logo_bytes, width=140)
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
 
