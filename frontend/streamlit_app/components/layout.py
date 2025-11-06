@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional
 
 import streamlit as st
-from streamlit.runtime.scriptrunner import script_run_context
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
         unsafe_allow_html=True,
     )
 
-    ctx = script_run_context.get_script_run_ctx()
+    ctx = get_script_run_ctx()
     if ctx is None:
         return
 
