@@ -230,6 +230,9 @@ def render_theme_toggle() -> None:
 
 def sidebar_info_block() -> None:
     """Standard sidebar header with team + data refresh details."""
+    logo_bytes = get_logo_bytes()
+    if logo_bytes:
+        st.sidebar.image(logo_bytes, width=120)
     st.sidebar.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
     st.sidebar.caption("Data updated every hour · Last refresh from notebook sync.")
     with st.sidebar:

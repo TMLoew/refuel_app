@@ -15,20 +15,28 @@ for path in (ROOT_DIR, APP_DIR):
 import streamlit as st
 
 try:
-    from frontend.streamlit_app.components.layout import render_top_nav, get_logo_path, render_footer
+    from frontend.streamlit_app.components.layout import (
+        render_top_nav,
+        get_logo_path,
+        get_logo_bytes,
+        render_footer,
+    )
     from frontend.streamlit_app.services.data_utils import load_enriched_data
 except ModuleNotFoundError:
-    from components.layout import render_top_nav, get_logo_path, render_footer
+    from components.layout import render_top_nav, get_logo_path, get_logo_bytes, render_footer
     from services.data_utils import load_enriched_data
 
 PAGE_ICON = get_logo_path() or "🏠"
 st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
 
-render_top_nav("Home.py", show_logo=False)
+render_top_nav("Home.py")
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
 
+logo_bytes = get_logo_bytes()
 with st.sidebar:
+    if logo_bytes:
+        st.image(logo_bytes, width=120)
     st.markdown("Live telemetry cockpit")
     st.caption("Data updated every hour · Last refresh from notebook sync.")
     st.divider()
