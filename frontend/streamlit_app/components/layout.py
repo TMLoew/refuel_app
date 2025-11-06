@@ -26,17 +26,18 @@ DEFAULT_NAV: List[NavItem] = [
 
 
 def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV) -> None:
-    """Render a top navigation bar using Streamlit's page links."""
+    """Render a top navigation bar with navigation buttons."""
     nav_items = list(nav_items)
     cols = st.columns(len(nav_items))
     for col, item in zip(cols, nav_items):
         with col:
-            st.page_link(
-                item.path,
-                label=item.label,
-                icon=item.emoji,
+            if st.button(
+                f"{item.emoji} {item.label}",
+                key=f"nav-{item.path}",
                 use_container_width=True,
-            )
+                type="primary" if item.path.endswith(active_page) else "secondary",
+            ):
+                st.switch_page(item.path)
 
 
 def sidebar_info_block() -> None:
