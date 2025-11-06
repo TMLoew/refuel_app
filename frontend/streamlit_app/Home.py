@@ -70,6 +70,7 @@ with col_left:
     elasticity = st.slider("Elasticity factor (negative means demand drops with price)", -3.0, 1.0, -1.2, step=0.1)
     price_range_pct = st.slider("Price adjustment range (%)", 10, 60, 30, step=5)
     promo_boost = st.slider("Promo boost on demand (%)", 0, 100, 15, step=5)
+    preferred_price = st.number_input("Test price (€)", min_value=0.5, max_value=10.0, value=round(avg_price, 2), step=0.1)
 
 price_points = np.linspace(avg_price * (1 - price_range_pct / 100), avg_price * (1 + price_range_pct / 100), 40)
 demand_curve = avg_units * (price_points / avg_price) ** elasticity * (1 + promo_boost / 100)
@@ -80,13 +81,24 @@ elasticity_fig = px.line(
     title="Elasticity curve",
 )
 st.plotly_chart(elasticity_fig, use_container_width=True)
+expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity * (1 + promo_boost / 100)
+st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
+
+# Simple optimal price heuristic assuming linear margin and no competition
+unit_cost = avg_price * 0.6
+margins = (price_points - unit_cost) * demand_curve
+optimal_idx = np.argmax(margins)
+optimal_price = price_points[optimal_idx]
+st.success(f"Optimal theoretical price (zero competition assumption): €{optimal_price:.2f}")
 
 with col_right:
     current_stock = st.number_input("Current snack stock (units)", min_value=0.0, value=round(avg_units * 5, 1), step=10.0)
     safety_stock = st.number_input(
         "Safety stock threshold", min_value=0.0, value=round(avg_units * 2, 1), step=5.0
     )
-    reorder_point = safety_stock * 1.2
+    lead_time_days = st.slider("Reorder lead time (days)", min_value=1, max_value=30, value=7, step=1)
+    lead_time_demand = avg_units * lead_time_days
+    reorder_point = safety_stock + lead_time_demand
     projected_units = demand_curve[-1]
     st.metric("Projected demand at highest price", f"{projected_units:.0f} units")
     stock_fig = px.bar(
