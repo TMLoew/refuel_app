@@ -16,11 +16,13 @@ from services.data_utils import load_enriched_data
 st.set_page_config(page_title="Refuel Control Center", page_icon="🏠", layout="wide")
 
 render_top_nav("Home.py")
+logo_bytes = get_logo_bytes()
+if logo_bytes:
+    st.image(logo_bytes, width=140)
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
 
 with st.sidebar:
-    logo_bytes = get_logo_bytes()
     if logo_bytes:
         st.image(logo_bytes, width=120)
     st.markdown("Live telemetry cockpit")
