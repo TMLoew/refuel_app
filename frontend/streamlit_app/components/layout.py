@@ -25,6 +25,7 @@ DEFAULT_NAV: List[NavItem] = [
     NavItem("What-if Lab", "🧪", "pages/3_WhatIf_Sim.py"),
     NavItem("Data Editor", "📝", "pages/4_Data_Editor.py"),
     NavItem("Settings", "⚙️", "pages/5_Settings_APIs.py"),
+    NavItem("Statistics", "📈", "pages/6_Statistics.py"),
 ]
 
 
