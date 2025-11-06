@@ -235,10 +235,10 @@ def render_inventory_game(df: pd.DataFrame) -> None:
             st.session_state["stock_level"] = start_stock
             st.session_state["stock_day_idx"] = 0
             st.session_state["stock_history"] = []
-            st.experimental_rerun()
+            st.rerun()
         if col_b.button("Reorder now"):
             st.session_state["stock_level"] = st.session_state.get("stock_level", start_stock) + reorder_amount
-            st.experimental_rerun()
+            st.rerun()
 
     if "stock_level" not in st.session_state:
         st.session_state["stock_level"] = start_stock
@@ -258,17 +258,17 @@ def render_inventory_game(df: pd.DataFrame) -> None:
     if st.session_state["stock_level"] <= low_threshold:
         st.warning("Low stock! Consider reordering before the next day.")
 
-    if st.button("Next day ➡️"):
-        st.session_state["stock_level"] -= current_day["daily_snacks"]
-        st.session_state["stock_history"].append(
-            {
-                "date": current_day["timestamp"].date(),
-                "stock_end": st.session_state["stock_level"],
-                "consumption": current_day["daily_snacks"],
-            }
-        )
-        st.session_state["stock_day_idx"] = (idx + 1) % len(daily_usage)
-        st.experimental_rerun()
+        if st.button("Next day ➡️"):
+            st.session_state["stock_level"] -= current_day["daily_snacks"]
+            st.session_state["stock_history"].append(
+                {
+                    "date": current_day["timestamp"].date(),
+                    "stock_end": st.session_state["stock_level"],
+                    "consumption": current_day["daily_snacks"],
+                }
+            )
+            st.session_state["stock_day_idx"] = (idx + 1) % len(daily_usage)
+            st.rerun()
 
     if st.session_state["stock_history"]:
         hist_df = pd.DataFrame(st.session_state["stock_history"])
