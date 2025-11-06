@@ -9,6 +9,7 @@ Outputs:
 
 from pathlib import Path
 from typing import Dict, List, Optional
+from datetime import date as _date
 import requests
 import pandas as pd
 
@@ -24,115 +25,157 @@ def month_to_season(month: int) -> str:
     if month in (6, 7, 8):  return "Summer"
     return "Autumn"
 
+def recommend_mix(temp_max_c: float, precip_mm: float, cardio_share: Optional[float]=None) -> Dict[str, float]:
+    """
+    Very simple rules:
+      - Hot & dry  -> Electrolyte, Iced Matcha, Isotonic up; Recovery down
+      - Rainy      -> Recovery & Protein up; Iced Matcha down
+      - Cardio bias (treadmill) -> Electrolyte/Isotonic up; Strength -> Protein up
+    Returns weights that sum ~1.0
+    """
+    hot = temp_max_c >= 24
+    rainy = precip_mm >= 2.0
 
-sales_data = [
-    {"date": "2025-10-24", "product": "Banana Shake", "qty": 28},
-    {"date": "2025-10-25", "product": "Banana Shake", "qty": 32},
-    {"date": "2025-10-26", "product": "Banana Shake", "qty": 21},
-]
-gym_data = [
-    {"date": "2025-10-24", "visitors": 230},
-    {"date": "2025-10-25", "visitors": 255},
-    {"date": "2025-10-26", "visitors": 190},
-]
-products_set = {row["product"] for row in sales_data}
-
-# availability, price_index per season for "Banana"
-seasonality: Dict[str, Dict[str, Tuple[float, float]]] = {
-    "Banana": {
-        "Winter": (0.6, 1.3),
-        "Summer": (1.0, 1.0),
-        "Spring": (0.9, 1.1),
-        "Autumn": (0.8, 1.2),
+    base = {
+        "Protein Shake":      0.22,
+        "Electrolyte Drink":  0.22,
+        "Iced Matcha":        0.18,
+        "Recovery Smoothie":  0.20,
+        "Isotonic Lemon":     0.18,
     }
-}
 
+    if hot and not rainy:
+        base["Electrolyte Drink"] += 0.06
+        base["Iced Matcha"]       += 0.05
+        base["Isotonic Lemon"]    += 0.03
+        base["Recovery Smoothie"] -= 0.07
 
-def get_daily_temp(date_str: str, lat=47.4239, lon=9.3748) -> float:
-    """Return daily max temperature for St. Gallen (Europe/Zurich) using Open-Meteo."""
+    if rainy:
+        base["Recovery Smoothie"] += 0.06
+        base["Protein Shake"]     += 0.04
+        base["Iced Matcha"]       -= 0.05
+
+    if cardio_share is not None:
+        cardio_share = max(0.0, min(1.0, float(cardio_share)))
+        base["Electrolyte Drink"] += 0.08 * cardio_share
+        base["Isotonic Lemon"]    += 0.05 * cardio_share
+        base["Protein Shake"]     += 0.10 * (1 - cardio_share)
+
+    total = sum(base.values())
+    return {k: round(v/total, 4) for k, v in base.items()}
+
+def fetch_daily_weather_range(start_date: str, end_date: str, lat: float = LAT, lon: float = LON) -> pd.DataFrame:
+    """
+    Get daily max temperature + precipitation for [start_date, end_date] (Europe/Zurich).
+    - Uses Archive API for past dates, Forecast API for current/future.
+    - Falls back to neutral weather if API fails or times out.
+    """
+    today = _date.today().strftime("%Y-%m-%d")
+    base = "https://archive-api.open-meteo.com/v1/archive" if end_date <= today else "https://api.open-meteo.com/v1/forecast"
+    url = (
+        f"{base}?latitude={lat}&longitude={lon}"
+        f"&start_date={start_date}&end_date={end_date}"
+        "&daily=temperature_2m_max,precipitation_sum&timezone=Europe/Zurich"
+    )
     try:
-        url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={lat}&longitude={lon}"
-            f"&start_date={date_str}&end_date={date_str}"
-            "&daily=temperature_2m_max&timezone=Europe/Zurich"
-        )
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=30)
         r.raise_for_status()
-        return float(r.json()["daily"]["temperature_2m_max"][0])
-    except Exception:
-        return 18.0  # fallback if API fails
+        j = r.json().get("daily", {})
+        times = pd.to_datetime(j.get("time", []))
+        if len(times) == 0:
+            raise RuntimeError("No 'daily' data returned")
+        dates = pd.Series(times.strftime("%Y-%m-%d"))
+        df = pd.DataFrame({
+            "date": dates,
+            "temp_max_c": j["temperature_2m_max"],
+            "precip_mm": j["precipitation_sum"],
+        })
+    except Exception as e:
+        print(f"⚠️ WARNING: weather fetch failed ({e}); using fallback neutral values.")
+        dates = pd.date_range(start=start_date, end=end_date, freq="D")
+        df = pd.DataFrame({
+            "date": dates.strftime("%Y-%m-%d"),
+            "temp_max_c": [20.0] * len(dates),
+            "precip_mm": [0.0] * len(dates),
+        })
+    return df
 
+def load_gym_daily(csv_path: str) -> pd.DataFrame:
+    """
+    From your 15-min gym CSV, build per-day:
+      - visitors = sum(checkins)
+      - cardio_share = treadmill_sessions / checkins
+    Falls back sensibly if columns are missing.
+    """
+    p = Path(csv_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Gym CSV not found: {csv_path}")
 
-class DataPipeline:
-    def __init__(self, ingredient: Ingredient, sales_rows: List[dict], gym_rows: List[dict]):
-        self.ingredient = ingredient
-        self.sales_rows = sales_rows
-        self.gym_rows = gym_rows
-        self._merged: List[dict] = []
+    df = pd.read_csv(p)
+    ts_col = "ts_local" if "ts_local" in df.columns else ("ts_local_naive" if "ts_local_naive" in df.columns else None)
+    if not ts_col:
+        raise ValueError("Expected 'ts_local' or 'ts_local_naive' column in gym CSV")
+    df["date"] = pd.to_datetime(df[ts_col]).dt.date.astype(str)
 
-    @staticmethod
-    def _parse_month(date_str: str) -> int:
-        return datetime.strptime(date_str, "%Y-%m-%d").month
+    has_checkins = "checkins" in df.columns
+    has_treadmill = "treadmill_sessions" in df.columns
 
-    @property
-    def merged(self) -> List[dict]:
-        return self._merged
+    if has_checkins:
+        visitors = df.groupby("date", as_index=False)["checkins"].sum().rename(columns={"checkins":"visitors"})
+    else:
+        visitors = df.groupby("date", as_index=False).size().rename(columns={"size":"visitors"})
 
-    def _season_for_date(self, date_str: str) -> str:
-        return month_to_season(self._parse_month(date_str))
+    if has_checkins and has_treadmill:
+        cardio = df.groupby("date", as_index=False)[["treadmill_sessions","checkins"]].sum()
+        cardio["cardio_share"] = (cardio["treadmill_sessions"] / cardio["checkins"].clip(lower=1)).clip(0,1)
+        cardio = cardio[["date","cardio_share"]]
+    else:
+        cardio = pd.DataFrame({"date": visitors["date"], "cardio_share": 0.5})
 
-    def _seasonal_indices(self, season: str) -> Tuple[float, float]:
-        # safe lookup if ingredient or season missing
-        return seasonality.get(self.ingredient.name, {}).get(season, (1.0, 1.0))
+    return visitors.merge(cardio, on="date", how="left")
 
-    def run(self) -> None:
-        gym_by_date = {row["date"]: row.get("visitors", 0) for row in self.gym_rows}
-        merged: List[dict] = []
-        for row in self.sales_rows:
-            d = row["date"]
-            temp = get_daily_temp(d)
-            visitors = gym_by_date.get(d, 0)
-            season = self._season_for_date(d)
-            avail, p_index = self._seasonal_indices(season)
-            merged.append({
-                "date": d,
-                "product": row["product"],
-                "qty": row["qty"],
-                "visitors": visitors,
-                "temp_max_c": temp,
-                "season": season,
-                "availability": avail,
-                "price_index": p_index,
-                "seasonal_price": self.ingredient.seasonal_price(season, p_index),
-                "dow": datetime.strptime(d, "%Y-%m-%d").weekday()
+def build_product_mix(
+    gym_csv_path: str = "data/gym_badges_0630_2200_long.csv",
+    out_csv_path: str = "data/product_mix_daily.csv",
+    base_conversion: float = 0.35,  # % of visitors who buy a drink
+) -> str:
+    gym = load_gym_daily(gym_csv_path)
+    if gym.empty:
+        raise RuntimeError("Gym daily aggregation is empty.")
+
+    start_date, end_date = min(gym["date"]), max(gym["date"])
+    wx = fetch_daily_weather_range(start_date, end_date)
+
+    df = gym.merge(wx, on="date", how="left")
+    df["season"] = pd.to_datetime(df["date"]).dt.month.map(month_to_season)
+
+    rows: List[dict] = []
+    for _, r in df.iterrows():
+        mix = recommend_mix(float(r["temp_max_c"]), float(r["precip_mm"]), cardio_share=float(r["cardio_share"]))
+        total_drinks = int(round(r["visitors"] * base_conversion))
+        for product, weight in mix.items():
+            rows.append({
+                "date": r["date"],
+                "visitors": int(r["visitors"]),
+                "cardio_share": round(float(r["cardio_share"]), 3),
+                "temp_max_c": round(float(r["temp_max_c"]), 1),
+                "precip_mm": round(float(r["precip_mm"]), 1),
+                "season": r["season"],
+                "product": product,
+                "weight": weight,
+                "suggested_qty": int(round(total_drinks * weight)),
+                "hot_day": int(r["temp_max_c"] >= 24),
+                "rainy_day": int(r["precip_mm"] >= 2.0),
             })
-        self._merged = merged
 
-
-def summary(merged_rows: List[dict]) -> str:
-    n = len(merged_rows)
-    total_qty = sum(r["qty"] for r in merged_rows)
-    avg_temp = round(sum(r["temp_max_c"] for r in merged_rows) / max(n, 1), 1)
-    avg_vis = round(sum(r["visitors"] for r in merged_rows) / max(n, 1), 1)
-    seasons = {r["season"] for r in merged_rows}
-    by_season = {s: sum(r["qty"] for r in merged_rows if r["season"] == s) for s in seasons}
-    lines = [
-        f"Records: {n}",
-        f"Total sold: {total_qty}",
-        f"Avg temp: {avg_temp}°C",
-        f"Avg visitors: {avg_vis}",
-        "Qty by season: " + ", ".join(f"{s}={by_season[s]}" for s in sorted(by_season))
-    ]
-    return "\n".join(lines)
-
+    out = pd.DataFrame(rows)
+    Path("data").mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_csv_path, index=False)
+    print(f"saved: {out_csv_path} with {len(out)} rows across {out['date'].nunique()} days")
+    return out_csv_path
 
 if __name__ == "__main__":
-    print("Products:", products_set)
-    banana = Ingredient("Banana", 2.5)
-    pipe = DataPipeline(banana, sales_data, gym_data)
-    pipe.run()
-    for rec in pipe.merged:
-        print(rec)
-    print("\n--- SUMMARY ---")
-    print(summary(pipe.merged))
+    try:
+        build_product_mix()
+    except Exception as e:
+        print("ERROR:", repr(e))
