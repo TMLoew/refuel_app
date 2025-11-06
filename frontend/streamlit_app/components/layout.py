@@ -57,9 +57,13 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
                     st.switch_page(item.path)
 
 
+LOGO_PATH = Path(__file__).resolve().parents[2] / "logo.webp"
+
+
 def sidebar_info_block() -> None:
     """Standard sidebar header with team + data refresh details."""
-    st.sidebar.image("https://static.streamlit.io/examples/dice.jpg", width=96)
+    if LOGO_PATH.exists():
+        st.sidebar.image(str(LOGO_PATH), width=120)
     st.sidebar.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
     st.sidebar.caption("Data updated every hour · Last refresh from notebook sync.")
     st.sidebar.divider()

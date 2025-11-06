@@ -7,6 +7,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 import streamlit as st
+from streamlit import st_autorefresh
 
 try:
     from frontend.streamlit_app.components.layout import render_top_nav
@@ -21,8 +22,11 @@ render_top_nav("Home.py")
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
 
+logo_path = Path(__file__).resolve().parents[1] / "logo.webp"
+
 with st.sidebar:
-    st.image("https://static.streamlit.io/examples/dice.jpg", width=96)
+    if logo_path.exists():
+        st.image(str(logo_path), width=120)
     st.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
     st.caption("Data updated every hour · Last refresh from notebook sync.")
     st.divider()
