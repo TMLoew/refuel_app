@@ -11,7 +11,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+from frontend.streamlit_app.components.layout import (
+    render_top_nav,
+    sidebar_info_block,
+    render_footer,
+    get_logo_path,
+)
 from frontend.streamlit_app.services.data_utils import (
     SNACK_PROMOS,
     WEATHER_SCENARIOS,
@@ -20,10 +25,11 @@ from frontend.streamlit_app.services.data_utils import (
     train_models,
 )
 
+PAGE_ICON = get_logo_path() or "💪"
 st.set_page_config(
     page_title="Refuel Ops Dashboard",
     layout="wide",
-    page_icon="💪",
+    page_icon=PAGE_ICON,
 )
 
 
@@ -371,6 +377,7 @@ def render_dashboard() -> None:
     st.subheader("What-if forecast")
     render_forecast_section(data, forecast_df)
     render_inventory_game(data)
+    render_footer()
 
 
 def _safe_render() -> None:

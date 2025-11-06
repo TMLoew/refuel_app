@@ -15,13 +15,19 @@ for path in (ROOT_DIR, APP_DIR):
 import streamlit as st
 
 try:
-    from frontend.streamlit_app.components.layout import render_top_nav, get_logo_bytes
+    from frontend.streamlit_app.components.layout import (
+        render_top_nav,
+        get_logo_bytes,
+        get_logo_path,
+        render_footer,
+    )
     from frontend.streamlit_app.services.data_utils import load_enriched_data
 except ModuleNotFoundError:
-    from components.layout import render_top_nav, get_logo_bytes
+    from components.layout import render_top_nav, get_logo_bytes, get_logo_path, render_footer
     from services.data_utils import load_enriched_data
 
-st.set_page_config(page_title="Refuel Control Center", page_icon="🏠", layout="wide")
+PAGE_ICON = get_logo_path() or "🏠"
+st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("Home.py")
 logo_bytes = get_logo_bytes()
@@ -306,6 +312,9 @@ def run_auto_simulation(
             }
         )
     return pd.DataFrame(rows)
+
+
+render_footer()
 
 
 def run_historic_replay(

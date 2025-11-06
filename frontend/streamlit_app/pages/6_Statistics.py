@@ -11,10 +11,16 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+from frontend.streamlit_app.components.layout import (
+    render_top_nav,
+    sidebar_info_block,
+    render_footer,
+    get_logo_path,
+)
 from frontend.streamlit_app.services.data_utils import load_enriched_data
 
-st.set_page_config(page_title="Statistics", page_icon="📈", layout="wide")
+PAGE_ICON = get_logo_path() or "📈"
+st.set_page_config(page_title="Statistics", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("6_Statistics.py")
 st.title("Statistical Rundown")
@@ -136,3 +142,4 @@ st.plotly_chart(daily_fig, use_container_width=True)
 st.info(
     "Use this page to validate demand hypotheses before configuring scenarios and automation on the other tabs."
 )
+render_footer()

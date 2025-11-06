@@ -9,10 +9,16 @@ if str(ROOT_DIR) not in sys.path:
 import pandas as pd
 import streamlit as st
 
-from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+from frontend.streamlit_app.components.layout import (
+    render_top_nav,
+    sidebar_info_block,
+    render_footer,
+    get_logo_path,
+)
 from frontend.streamlit_app.services.data_utils import DATA_FILE, load_enriched_data
 
-st.set_page_config(page_title="Data Workbench", page_icon="📝", layout="wide")
+PAGE_ICON = get_logo_path() or "📝"
+st.set_page_config(page_title="Data Workbench", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("4_Data_Editor.py")
 st.title("Data Workbench")
@@ -71,3 +77,4 @@ if uploaded:
     new_df = pd.read_csv(uploaded)
     st.success(f"Loaded {len(new_df)} rows. Replace `{DATA_FILE}` manually to use this dataset.")
     st.dataframe(new_df.head(20), use_container_width=True)
+render_footer()

@@ -67,14 +67,30 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
                     st.switch_page(item.path)
 
 
-LOGO_PATH = Path(__file__).resolve().parents[3] / "logo.webp"
+LOGO_CANDIDATES = [
+    Path(__file__).resolve().parents[3] / "logo.webp",
+    Path(__file__).resolve().parents[3] / "frontend" / "logo.webp",
+]
 
 
 @lru_cache(maxsize=1)
-def get_logo_bytes() -> Optional[bytes]:
-    if LOGO_PATH.exists():
-        return LOGO_PATH.read_bytes()
+def _resolve_logo_path() -> Optional[Path]:
+    for logo_path in LOGO_CANDIDATES:
+        if logo_path.exists():
+            return logo_path
     return None
+
+
+def get_logo_path() -> Optional[str]:
+    resolved = _resolve_logo_path()
+    return str(resolved) if resolved else None
+
+
+def get_logo_bytes() -> Optional[bytes]:
+    resolved = _resolve_logo_path()
+    if resolved is None:
+        return None
+    return resolved.read_bytes()
 
 
 def sidebar_info_block() -> None:
@@ -85,3 +101,8 @@ def sidebar_info_block() -> None:
     st.sidebar.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
     st.sidebar.caption("Data updated every hour · Last refresh from notebook sync.")
     st.sidebar.divider()
+
+
+def render_footer() -> None:
+    st.markdown("---")
+    st.markdown("University St. Gallen (HSG) · Tristan · Alice · Benjamin · Marie · Solal")

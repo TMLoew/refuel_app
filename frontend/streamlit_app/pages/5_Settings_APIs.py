@@ -9,11 +9,17 @@ if str(ROOT_DIR) not in sys.path:
 
 import streamlit as st
 
-from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+from frontend.streamlit_app.components.layout import (
+    render_top_nav,
+    sidebar_info_block,
+    render_footer,
+    get_logo_path,
+)
 from frontend.streamlit_app.services.data_utils import load_enriched_data
 from frontend.streamlit_app.services.weather_pipeline import DEFAULT_LAT, DEFAULT_LON
 
-st.set_page_config(page_title="Settings & APIs", page_icon="⚙️", layout="wide")
+PAGE_ICON = get_logo_path() or "⚙️"
+st.set_page_config(page_title="Settings & APIs", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("5_Settings_APIs.py")
 st.title("Settings & API Console")
@@ -73,3 +79,4 @@ st.table(webhooks)
 st.subheader("Export settings")
 export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon)}, indent=2)
 st.download_button("Download config JSON", export_blob, file_name="refuel_config.json", mime="application/json")
+render_footer()
