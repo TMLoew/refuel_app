@@ -7,7 +7,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 import streamlit as st
-from streamlit import st_autorefresh
 
 try:
     from frontend.streamlit_app.components.layout import render_top_nav
