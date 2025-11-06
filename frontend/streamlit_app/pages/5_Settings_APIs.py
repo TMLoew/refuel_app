@@ -10,6 +10,7 @@ if str(ROOT_DIR) not in sys.path:
 import streamlit as st
 
 from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+from frontend.streamlit_app.services.data_utils import load_enriched_data
 from frontend.streamlit_app.services.weather_pipeline import DEFAULT_LAT, DEFAULT_LON
 
 st.set_page_config(page_title="Settings & APIs", page_icon="⚙️", layout="wide")
@@ -40,8 +41,13 @@ with st.form("weather-form"):
         )
 
 st.subheader("API health")
+data_sample = load_enriched_data(use_weather_api=True)
+weather_meta = data_sample.attrs.get("weather_meta", {})
+latency = weather_meta.get("latency_ms")
+latency_text = f"{latency:.0f} ms" if latency else "n/a"
+
 health_cols = st.columns(3)
-health_cols[0].metric("Weather API", "✅ OK", delta="latency 180 ms")
+health_cols[0].metric("Weather API", "✅ OK" if latency else "ℹ️ Pending", delta=f"latency {latency_text}")
 health_cols[1].metric("Gym sensors", "⚠️ Delay", delta="+18 min")
 health_cols[2].metric("POS snacks", "✅ OK", delta="live")
 
