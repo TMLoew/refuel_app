@@ -138,7 +138,7 @@ def load_enriched_data(csv_path: Path = DATA_FILE, use_weather_api: bool = False
         bins=[-10, 5, 15, 25, 40],
         labels=["Freezing", "Cool", "Mild", "Warm"],
     )
-    return df
+    return add_time_signals(df)
 
 
 def add_time_signals(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -158,6 +158,10 @@ def train_models(df: pd.DataFrame) -> Tuple[Pipeline, Pipeline]:
         return None, None
 
     feature_df = add_time_signals(df)
+    required_cols = set(CHECKIN_FEATURES)
+    missing = sorted(required_cols - set(feature_df.columns))
+    if missing:
+        raise ValueError(f"Missing engineered features: {missing}")
     checkin_model = Pipeline(
         [
             ("scale", StandardScaler()),
