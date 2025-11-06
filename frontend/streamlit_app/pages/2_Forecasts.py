@@ -66,7 +66,12 @@ heatmap_fig = go.Figure(
         z=pivot.values,
         x=pivot.columns,
         y=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        colorscale="Viridis",
+        colorscale=[
+            [0.0, "#ffffff"],
+            [0.3, "#ffe5e5"],
+            [0.6, "#ff7b7b"],
+            [1.0, "#a80000"],
+        ],
         colorbar=dict(title="Avg check-ins/hr"),
     )
 )
@@ -75,6 +80,18 @@ heatmap_fig.update_layout(title="Hourly utilization pattern")
 col1, col2 = st.columns(2)
 col1.plotly_chart(trend_fig, use_container_width=True)
 col2.plotly_chart(heatmap_fig, use_container_width=True)
+
+# --- Correlation matrix --------------------------------------------------------
+corr_fields = ["checkins", "snack_units", "temperature_c", "precipitation_mm", "humidity_pct"]
+corr_matrix = history[corr_fields].corr()
+corr_fig = px.imshow(
+    corr_matrix,
+    text_auto=".2f",
+    aspect="auto",
+    color_continuous_scale="RdBu",
+    title="Correlation matrix: weather vs. demand",
+)
+st.plotly_chart(corr_fig, use_container_width=True)
 
 # --- Feature sensitivity --------------------------------------------------------
 checkin_model, snack_model = models
