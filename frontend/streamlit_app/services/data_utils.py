@@ -64,13 +64,11 @@ def load_enriched_data(csv_path: Path = DATA_FILE, use_weather_api: bool = False
     if df.empty:
         return df
 
-    if "ts_local_naive" in df.columns:
-        timestamp_col = "ts_local_naive"
-    elif "timestamp" in df.columns:
-        timestamp_col = "timestamp"
-    else:
+    timestamp_candidates = ["ts_local_naive", "ts_local", "timestamp"]
+    timestamp_col = next((col for col in timestamp_candidates if col in df.columns), None)
+    if timestamp_col is None:
         raise ValueError(
-            "Expected a timestamp column named 'ts_local_naive' or 'timestamp' in gym_badges.csv."
+            "Expected a timestamp column (one of: ts_local_naive, ts_local, timestamp) in gym_badges.csv."
         )
 
     df[timestamp_col] = pd.to_datetime(df[timestamp_col])
