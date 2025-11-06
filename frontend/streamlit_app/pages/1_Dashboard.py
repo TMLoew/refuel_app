@@ -240,9 +240,10 @@ def render_dashboard() -> None:
         f"Weather source · {'Open-Meteo API' if weather_source == 'open-meteo' else 'synthetic fallback'}"
     )
     if weather_meta:
+        latency_text = f"{weather_meta.get('latency_ms', 0):.0f} ms" if weather_meta.get("latency_ms") else "n/a"
         st.caption(
-            f"Weather last synced {weather_meta.get('updated_at', 'n/a')} UTC · coverage {weather_meta.get('coverage_start', '?')} → {weather_meta.get('coverage_end', '?')}"
-    )
+            f"Weather last synced {weather_meta.get('updated_at', 'n/a')} UTC · latency {latency_text} · coverage {weather_meta.get('coverage_start', '?')} → {weather_meta.get('coverage_end', '?')}"
+        )
     if use_weather_api and weather_source != "open-meteo":
         st.warning("Live weather API unreachable. Using synthetic fallback instead.")
 

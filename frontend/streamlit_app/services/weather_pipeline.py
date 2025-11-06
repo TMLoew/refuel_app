@@ -9,6 +9,7 @@ Open-Meteo API with safe fallbacks.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -99,7 +100,7 @@ def _request_hourly_weather(
     lat: float = DEFAULT_LAT,
     lon: float = DEFAULT_LON,
     timezone: str = DEFAULT_TZ,
-) -> Dict:
+) -> Tuple[Dict, float]:
     _ensure_requests()
     url = (
         "https://api.open-meteo.com/v1/forecast"
@@ -108,9 +109,11 @@ def _request_hourly_weather(
         "&hourly=temperature_2m,relative_humidity_2m,precipitation"
         f"&timezone={timezone}"
     )
+    start = time.perf_counter()
     resp = requests.get(url, timeout=10)
+    latency_ms = (time.perf_counter() - start) * 1000
     resp.raise_for_status()
-    return resp.json()
+    return resp.json(), latency_ms
 
 
 def fetch_hourly_weather_frame(
@@ -118,7 +121,7 @@ def fetch_hourly_weather_frame(
     lat: float = DEFAULT_LAT,
     lon: float = DEFAULT_LON,
     timezone: str = DEFAULT_TZ,
-) -> pd.DataFrame:
+) -> Tuple[pd.DataFrame, float]:
     """
     Retrieve hourly temperature, humidity, and precipitation covering the provided timestamps.
     """
@@ -128,7 +131,7 @@ def fetch_hourly_weather_frame(
     start_date = min(timestamps).strftime("%Y-%m-%d")
     end_date = max(timestamps).strftime("%Y-%m-%d")
 
-    payload = _request_hourly_weather(start_date, end_date, lat=lat, lon=lon, timezone=timezone)
+    payload, latency_ms = _request_hourly_weather(start_date, end_date, lat=lat, lon=lon, timezone=timezone)
     hourly = payload.get("hourly")
     if not hourly:
         raise ValueError("No hourly weather data returned by Open-Meteo")
@@ -141,7 +144,7 @@ def fetch_hourly_weather_frame(
             "precipitation_mm": hourly.get("precipitation"),
         }
     )
-    return frame
+    return frame, latency_ms
 
 
 class DataPipeline:
