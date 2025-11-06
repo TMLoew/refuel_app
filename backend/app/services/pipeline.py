@@ -1,8 +1,9 @@
 import requests
 from datetime import datetime
+from typing import List, Dict, Tuple
 
 class Ingredient:
-    def _init_(self, name: str, base_price_per_unit: float):
+    def __init__(self, name: str, base_price_per_unit: float):
         self.name = name
         self.base_price_per_unit = base_price_per_unit
 
@@ -39,8 +40,8 @@ gym_data = [
 ]
 products_set = {row["product"] for row in sales_data}
 
-
-seasonality = {
+# availability, price_index per season for "Banana"
+seasonality: Dict[str, Dict[str, Tuple[float, float]]] = {
     "Banana": {
         "Winter": (0.6, 1.3),
         "Summer": (1.0, 1.0),
@@ -51,6 +52,7 @@ seasonality = {
 
 
 def get_daily_temp(date_str: str, lat=47.4239, lon=9.3748) -> float:
+    """Return daily max temperature for St. Gallen (Europe/Zurich) using Open-Meteo."""
     try:
         url = (
             "https://api.open-meteo.com/v1/forecast"
@@ -62,34 +64,34 @@ def get_daily_temp(date_str: str, lat=47.4239, lon=9.3748) -> float:
         r.raise_for_status()
         return float(r.json()["daily"]["temperature_2m_max"][0])
     except Exception:
-        return 18.0  # fallback si API KO
+        return 18.0  # fallback if API fails
 
 
 class DataPipeline:
-    def _init_(self, ingredient: Ingredient, sales_rows: list, gym_rows: list):
+    def __init__(self, ingredient: Ingredient, sales_rows: List[dict], gym_rows: List[dict]):
         self.ingredient = ingredient
         self.sales_rows = sales_rows
         self.gym_rows = gym_rows
-        self._merged = []
+        self._merged: List[dict] = []
 
     @staticmethod
     def _parse_month(date_str: str) -> int:
         return datetime.strptime(date_str, "%Y-%m-%d").month
 
     @property
-    def merged(self) -> list:
+    def merged(self) -> List[dict]:
         return self._merged
 
     def _season_for_date(self, date_str: str) -> str:
         return month_to_season(self._parse_month(date_str))
 
-    def _seasonal_indices(self, season: str) -> tuple:
-        # safe lookup: évite KeyError si l'ingrédient ou la saison manquent
+    def _seasonal_indices(self, season: str) -> Tuple[float, float]:
+        # safe lookup if ingredient or season missing
         return seasonality.get(self.ingredient.name, {}).get(season, (1.0, 1.0))
 
     def run(self) -> None:
-        gym_by_date = {row["date"]: row["visitors"] for row in self.gym_rows}
-        merged = []
+        gym_by_date = {row["date"]: row.get("visitors", 0) for row in self.gym_rows}
+        merged: List[dict] = []
         for row in self.sales_rows:
             d = row["date"]
             temp = get_daily_temp(d)
@@ -101,7 +103,7 @@ class DataPipeline:
                 "product": row["product"],
                 "qty": row["qty"],
                 "visitors": visitors,
-                "temp": temp,
+                "temp_max_c": temp,
                 "season": season,
                 "availability": avail,
                 "price_index": p_index,
@@ -111,11 +113,11 @@ class DataPipeline:
         self._merged = merged
 
 
-def summary(merged_rows: list) -> str:
+def summary(merged_rows: List[dict]) -> str:
     n = len(merged_rows)
     total_qty = sum(r["qty"] for r in merged_rows)
-    avg_temp = round(sum(r["temp"] for r in merged_rows) / max(n,1), 1)
-    avg_vis = round(sum(r["visitors"] for r in merged_rows) / max(n,1), 1)
+    avg_temp = round(sum(r["temp_max_c"] for r in merged_rows) / max(n, 1), 1)
+    avg_vis = round(sum(r["visitors"] for r in merged_rows) / max(n, 1), 1)
     seasons = {r["season"] for r in merged_rows}
     by_season = {s: sum(r["qty"] for r in merged_rows if r["season"] == s) for s in seasons}
     lines = [
@@ -127,7 +129,8 @@ def summary(merged_rows: list) -> str:
     ]
     return "\n".join(lines)
 
-if _name_ == "_main_":
+
+if __name__ == "__main__":
     print("Products:", products_set)
     banana = Ingredient("Banana", 2.5)
     pipe = DataPipeline(banana, sales_data, gym_data)
