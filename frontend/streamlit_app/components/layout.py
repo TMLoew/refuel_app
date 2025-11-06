@@ -27,16 +27,14 @@ DEFAULT_NAV: List[NavItem] = [
 
 
 def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV) -> None:
-    """Render a top nav bar that links to registered Streamlit pages."""
+    """Render a top nav bar that switches pages without opening new tabs."""
     st.markdown(
         "<style>[data-testid='stSidebarNav']{display:none !important;}</style>",
         unsafe_allow_html=True,
     )
-
     ctx = get_script_run_ctx()
     if ctx is None:
         return
-
     pages = ctx.pages_manager.get_pages()
 
     def lookup(path: str) -> Optional[dict]:
@@ -47,15 +45,15 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
 
     cols = st.columns(len(nav_items))
     for col, item in zip(cols, nav_items):
-        data = lookup(item.path)
-        if not data:
+        page_meta = lookup(item.path)
+        if not page_meta:
             continue
         label = f"{item.emoji} {item.label}"
         with col:
             if item.path.endswith(active_page):
                 st.button(label, use_container_width=True, disabled=True)
             else:
-                st.link_button(label, data["url_pathname"], use_container_width=True)
+                st.button(label, use_container_width=True, on_click=st.switch_page, args=(item.path,))
 
 
 def sidebar_info_block() -> None:
