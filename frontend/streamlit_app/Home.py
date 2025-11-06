@@ -122,144 +122,108 @@ with pricing_tab:
     st.plotly_chart(profit_fig, use_container_width=True)
 
 with inventory_tab:
-    st.subheader("Inventory planner")
-    with st.container():
-        avg_price = float(data["snack_price"].mean())
-        avg_units = float(data["snack_units"].mean())
+    sim_mode = st.selectbox("Simulation mode", ["Manual Planner", "Historic Replay", "Weather-aware Autopilot"])
+    avg_price = float(data["snack_price"].mean())
+    avg_units = float(data["snack_units"].mean())
+
+    if sim_mode == "Manual Planner":
+        st.subheader("Manual planner")
         current_stock = st.number_input("Current snack stock (units)", min_value=0.0, value=round(avg_units * 5, 1), step=10.0)
-        safety_stock = st.number_input(
-            "Safety stock threshold", min_value=0.0, value=round(avg_units * 2, 1), step=5.0
-        )
+        safety_stock = st.number_input("Safety stock threshold", min_value=0.0, value=round(avg_units * 2, 1), step=5.0)
         lead_time_days = st.slider("Reorder lead time (days)", min_value=1, max_value=30, value=7, step=1)
         lead_time_demand = avg_units * lead_time_days
         reorder_point = safety_stock + lead_time_demand
-        stock_fig = px.bar(
-            x=["Current"],
-            y=[current_stock],
-            labels={"x": "", "y": "Units"},
-            title="Stock vs. safety bands",
-        )
-        stock_fig.add_hrect(
-            y0=safety_stock,
-            y1=safety_stock,
-            line_width=2,
-            line_color="orange",
-            annotation_text="Safety stock",
-            annotation_position="top right",
-        )
-        stock_fig.add_hrect(
-            y0=reorder_point,
-            y1=reorder_point,
-            line_width=2,
-            line_color="red",
-            annotation_text="Reorder point",
-            annotation_position="bottom right",
-        )
+        stock_fig = px.bar(x=["Current"], y=[current_stock], labels={"x": "", "y": "Units"}, title="Stock vs. safety bands")
+        stock_fig.add_hrect(y0=safety_stock, y1=safety_stock, line_width=2, line_color="orange", annotation_text="Safety stock", annotation_position="top right")
+        stock_fig.add_hrect(y0=reorder_point, y1=reorder_point, line_width=2, line_color="red", annotation_text="Reorder point", annotation_position="bottom right")
         st.plotly_chart(stock_fig, use_container_width=True)
-        if current_stock <= safety_stock:
-            st.error("Low stock alert: inventory below safety threshold!")
-        elif current_stock <= reorder_point:
-            st.warning("Stock above safety but heading toward reorder point.")
+        rolling_daily = daily_summary["snack_units"].rolling(7, min_periods=1).mean().iloc[-1]
+        auto_stock = st.number_input("Auto-stock level (units)", min_value=0.0, value=current_stock, step=10.0, key="auto-stock")
+        auto_lead = st.slider("Auto lead time (days)", 1, 21, lead_time_days, key="auto-lead")
+        service_buffer = st.slider("Buffer after delivery (days)", 1, 14, 3, key="auto-buffer")
+        days_until_out = auto_stock / max(rolling_daily, 1)
+        recommended_order_in = max(0.0, days_until_out - auto_lead)
+        recommended_qty = max(0.0, (auto_lead + service_buffer) * rolling_daily - auto_stock)
+        col_a, col_b = st.columns(2)
+        col_a.metric("Days until stockout", f"{days_until_out:.1f} d")
+        col_b.metric("Recommended reorder in", f"{recommended_order_in:.1f} d")
+        st.write(f"Order ~**{recommended_qty:.0f} units** to cover lead time + buffer at the current daily run rate of {rolling_daily:.0f} units.")
+
+    elif sim_mode == "Historic Replay":
+        st.subheader("Historic replay")
+        if daily_summary.empty:
+            st.info("Need daily history to run the simulator.")
         else:
-            st.success("Stock level healthy. No alert triggered.")
+            dates_sorted = sorted(daily_summary["date"].unique())
+            start_date = st.select_slider("Simulation start date", options=dates_sorted, value=dates_sorted[0])
+            sim_weeks = st.slider("Number of weeks", 1, 12, 4)
+            sim_stock = st.number_input("Simulation starting stock", min_value=0.0, value=round(avg_units * 5, 1), step=10.0, key="sim-stock")
+            sim_safety = st.number_input("Simulation safety stock", min_value=0.0, value=round(avg_units * 2, 1), step=5.0, key="sim-safety")
+            sim_reorder_qty = st.number_input("Simulation reorder quantity", min_value=0.0, value=round(avg_units * 4, 1), step=10.0, key="sim-reorder")
+            auto_reorder = st.checkbox("Auto reorder when below safety", value=True, key="sim-auto")
+            if st.button("Run historic replay", key="run-historic"):
+                start_idx = daily_summary.index[daily_summary["date"] == start_date][0]
+                total_days_sim = sim_weeks * 7
+                hist_df = run_historic_replay(
+                    daily_summary,
+                    start_idx=start_idx,
+                    total_days=total_days_sim,
+                    start_stock=sim_stock,
+                    safety_stock=sim_safety,
+                    reorder_qty=sim_reorder_qty,
+                    auto_reorder=auto_reorder,
+                )
+                st.session_state["historic_results"] = hist_df
+            hist_df = st.session_state.get("historic_results")
+            if isinstance(hist_df, pd.DataFrame) and not hist_df.empty:
+                sim_fig = px.line(hist_df, x="date", y="stock_after", title="Simulated stock over historic weeks")
+                sim_fig.add_hline(y=sim_safety, line_dash="dot", line_color="orange", annotation_text="Safety stock")
+                st.plotly_chart(sim_fig, use_container_width=True)
+                st.dataframe(hist_df, use_container_width=True, height=300)
 
-    st.subheader("Auto restock guidance")
-    rolling_daily = daily_summary["snack_units"].rolling(7, min_periods=1).mean().iloc[-1]
-    auto_stock = st.number_input("Auto-stock level (units)", min_value=0.0, value=current_stock, step=10.0, key="auto-stock")
-    auto_lead = st.slider("Auto lead time (days)", 1, 21, lead_time_days, key="auto-lead")
-    service_buffer = st.slider("Buffer after delivery (days)", 1, 14, 3, key="auto-buffer")
-    days_until_out = auto_stock / max(rolling_daily, 1)
-    recommended_order_in = max(0.0, days_until_out - auto_lead)
-    recommended_qty = max(0.0, (auto_lead + service_buffer) * rolling_daily - auto_stock)
-    col_a, col_b = st.columns(2)
-    col_a.metric("Days until stockout", f"{days_until_out:.1f} d")
-    col_b.metric("Recommended reorder in", f"{recommended_order_in:.1f} d")
-    st.write(
-        f"Order ~**{recommended_qty:.0f} units** to cover lead time + buffer at the current daily run rate of {rolling_daily:.0f} units."
-    )
-
-    st.subheader("Historic week simulator")
-    if daily_summary.empty:
-        st.info("Need daily history to run the simulator.")
     else:
-        dates_sorted = sorted(daily_summary["date"].unique())
-        start_date = st.select_slider("Simulation start date", options=dates_sorted, value=dates_sorted[0])
-        sim_weeks = st.slider("Number of weeks", 1, 12, 4)
-        sim_stock = st.number_input("Simulation starting stock", min_value=0.0, value=current_stock, step=10.0, key="sim-stock")
-        sim_safety = st.number_input("Simulation safety stock", min_value=0.0, value=safety_stock, step=5.0, key="sim-safety")
-        sim_lead = st.slider("Simulation reorder lead (days)", 1, 21, lead_time_days, key="sim-lead")
-        sim_reorder_qty = st.number_input(
-            "Simulation reorder quantity", min_value=0.0, value=reorder_point - safety_stock, step=10.0, key="sim-reorder"
-        )
-        auto_reorder = st.checkbox("Auto reorder when below safety", value=True, key="sim-auto")
-
-        start_idx = daily_summary.index[daily_summary["date"] == start_date][0]
-        total_days_sim = sim_weeks * 7
-        stock = sim_stock
-        sim_rows: List[dict] = []
-        for offset in range(total_days_sim):
-            row = daily_summary.iloc[(start_idx + offset) % len(daily_summary)]
-            demand = float(row["snack_units"])
-            sold = min(stock, demand)
-            stock -= sold
-            reordered = False
-            if auto_reorder and stock <= sim_safety:
-                stock += sim_reorder_qty
-                reordered = True
-            sim_rows.append(
-                {
-                    "date": row["date"].isoformat(),
-                    "demand": round(demand, 1),
-                    "sold": round(sold, 1),
-                    "stock_after": round(stock, 1),
-                    "reordered": "Yes" if reordered else "",
-                }
+        st.subheader("Weather-aware autopilot")
+        derived_conversion = float(data["snack_units"].sum()) / max(float(data["checkins"].sum()), 1.0)
+        derived_conversion = float(np.clip(derived_conversion, 0.05, 0.9))
+        auto_days = st.slider("Simulation horizon (days)", 7, 90, 28, key="auto-days")
+        lead_time_auto = 7
+        service_factor = 1.65
+        demand_std = float(daily_summary["snack_units"].std() or avg_units * 0.1)
+        mean_checkins = float(daily_summary["checkins"].mean())
+        lead_time_demand = derived_conversion * mean_checkins * lead_time_auto
+        safety_auto = max(0.0, lead_time_demand + service_factor * demand_std * np.sqrt(lead_time_auto))
+        reorder_qty_auto = safety_auto + lead_time_demand
+        starting_auto = reorder_qty_auto * 2
+        auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
+        auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
+        st.caption("Autopilot adjusts pricing using weather, elasticity, and gym traffic to maximize profit.")
+        cola, colb, colc = st.columns(3)
+        cola.metric("Derived conversion", f"{derived_conversion:.2f}")
+        colb.metric("Recommended safety stock", f"{safety_auto:.0f} units")
+        colc.metric("Recommended reorder qty", f"{reorder_qty_auto:.0f} units")
+        if st.button("Run automated simulation", key="auto-run"):
+            auto_df = run_auto_simulation(
+                daily_summary,
+                horizon_days=auto_days,
+                starting_stock=starting_auto,
+                safety_stock=safety_auto,
+                reorder_qty=reorder_qty_auto,
+                unit_cost=auto_unit_cost,
+                fee=auto_fee,
+                base_price=avg_price,
+                elasticity=elasticity,
+                conversion_rate=derived_conversion,
             )
-        sim_df = pd.DataFrame(sim_rows)
-        sim_fig = px.line(sim_df, x="date", y="stock_after", title="Simulated stock over historic weeks")
-        sim_fig.add_hline(y=sim_safety, line_dash="dot", line_color="orange", annotation_text="Safety stock")
-        st.plotly_chart(sim_fig, use_container_width=True)
-        st.dataframe(sim_df, use_container_width=True, height=300)
-
-    st.subheader("Automated pricing & weather-aware simulation")
-    derived_conversion = float(data["snack_units"].sum()) / max(float(data["checkins"].sum()), 1.0)
-    derived_conversion = float(np.clip(derived_conversion, 0.05, 0.9))
-    auto_days = st.slider("Simulation horizon (days)", 7, 90, 28, key="auto-days")
-    lead_time_auto = 7
-    service_factor = 1.65
-    demand_std = float(daily_summary["snack_units"].std() or avg_units * 0.1)
-    mean_checkins = float(daily_summary["checkins"].mean())
-    lead_time_demand = derived_conversion * mean_checkins * lead_time_auto
-    safety_auto = max(0.0, lead_time_demand + service_factor * demand_std * np.sqrt(lead_time_auto))
-    reorder_qty_auto = safety_auto + lead_time_demand
-    starting_auto = reorder_qty_auto * 2
-    auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
-    auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
-    cola, colb, colc = st.columns(3)
-    cola.metric("Derived conversion", f"{derived_conversion:.2f}")
-    colb.metric("Recommended safety stock", f"{safety_auto:.0f} units")
-    colc.metric("Recommended reorder qty", f"{reorder_qty_auto:.0f} units")
-    run_auto = st.button("Simulate automated plan")
-    if run_auto:
-        auto_df = run_auto_simulation(
-            daily_summary,
-            horizon_days=auto_days,
-            starting_stock=starting_auto,
-            safety_stock=safety_auto,
-            reorder_qty=reorder_qty_auto,
-            unit_cost=auto_unit_cost,
-            fee=auto_fee,
-            base_price=avg_price,
-            elasticity=elasticity,
-            conversion_rate=derived_conversion,
-        )
-        if auto_df.empty:
-            st.warning("Simulation failed; need more data.")
-        else:
+            if auto_df.empty:
+                st.warning("Simulation failed; need more data.")
+            else:
+                st.session_state["auto_results"] = auto_df
+        auto_df = st.session_state.get("auto_results")
+        if isinstance(auto_df, pd.DataFrame) and not auto_df.empty:
             st.metric("Total profit", f"€{auto_df['profit'].sum():.0f}")
             st.metric("Ending stock", f"{auto_df['stock_after'].iloc[-1]:.0f} units")
             auto_fig = px.line(auto_df, x="date", y="stock_after", title="Automated stock trajectory")
-            auto_fig.add_hline(y=safety_stock, line_dash="dot", line_color="orange", annotation_text="Safety stock")
+            auto_fig.add_hline(y=safety_auto, line_dash="dot", line_color="orange", annotation_text="Safety stock")
             auto_fig.add_scatter(
                 x=auto_df.loc[auto_df["reordered"] == "Yes", "date"],
                 y=auto_df.loc[auto_df["reordered"] == "Yes", "stock_after"],
@@ -339,6 +303,38 @@ def run_auto_simulation(
                 "profit": round(profit, 2),
                 "stock_after": round(stock, 1),
                 "reordered": reordered,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def run_historic_replay(
+    daily_df: pd.DataFrame,
+    start_idx: int,
+    total_days: int,
+    start_stock: float,
+    safety_stock: float,
+    reorder_qty: float,
+    auto_reorder: bool,
+) -> pd.DataFrame:
+    stock = start_stock
+    rows: List[dict] = []
+    for offset in range(total_days):
+        row = daily_df.iloc[(start_idx + offset) % len(daily_df)]
+        demand = float(row["snack_units"])
+        sold = min(stock, demand)
+        stock -= sold
+        reordered = False
+        if auto_reorder and stock <= safety_stock:
+            stock += reorder_qty
+            reordered = True
+        rows.append(
+            {
+                "date": row["date"].isoformat(),
+                "demand": round(demand, 1),
+                "sold": round(sold, 1),
+                "stock_after": round(stock, 1),
+                "reordered": "Yes" if reordered else "",
             }
         )
     return pd.DataFrame(rows)
