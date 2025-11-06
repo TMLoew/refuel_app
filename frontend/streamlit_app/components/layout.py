@@ -20,12 +20,12 @@ class NavItem:
 
 
 DEFAULT_NAV: List[NavItem] = [
-    NavItem("Home", "🏠", "Home.py", "../Home.py"),
-    NavItem("Dashboard", "📊", "pages/1_Dashboard.py", "1_Dashboard.py"),
-    NavItem("Forecasts", "🔮", "pages/2_Forecasts.py", "2_Forecasts.py"),
-    NavItem("What-if Lab", "🧪", "pages/3_WhatIf_Sim.py", "3_WhatIf_Sim.py"),
-    NavItem("Data Editor", "📝", "pages/4_Data_Editor.py", "4_Data_Editor.py"),
-    NavItem("Settings", "⚙️", "pages/5_Settings_APIs.py", "5_Settings_APIs.py"),
+    NavItem("Home", "🏠", "frontend/streamlit_app/Home.py", "Home.py"),
+    NavItem("Dashboard", "📊", "frontend/streamlit_app/pages/1_Dashboard.py", "1_Dashboard.py"),
+    NavItem("Forecasts", "🔮", "frontend/streamlit_app/pages/2_Forecasts.py", "2_Forecasts.py"),
+    NavItem("What-if Lab", "🧪", "frontend/streamlit_app/pages/3_WhatIf_Sim.py", "3_WhatIf_Sim.py"),
+    NavItem("Data Editor", "📝", "frontend/streamlit_app/pages/4_Data_Editor.py", "4_Data_Editor.py"),
+    NavItem("Settings", "⚙️", "frontend/streamlit_app/pages/5_Settings_APIs.py", "5_Settings_APIs.py"),
 ]
 
 
