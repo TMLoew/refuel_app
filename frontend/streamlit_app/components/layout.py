@@ -7,7 +7,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-import plotly.io as pio
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
@@ -44,10 +43,6 @@ def render_top_nav(
     if ctx is None:
         return
     pages = ctx.pages_manager.get_pages()
-    if "ui_theme_mode" not in st.session_state:
-        st.session_state["ui_theme_mode"] = DEFAULT_THEME_MODE
-        st.session_state["theme-toggle"] = "🌞"
-    apply_theme(st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE))
     logo_bytes = get_logo_bytes() if show_logo else None
 
     def lookup(path: str) -> Optional[dict]:
@@ -101,135 +96,6 @@ def get_logo_bytes() -> Optional[bytes]:
         return None
     return resolved.read_bytes()
 
-
-DEFAULT_THEME_MODE = "light"
-THEME_CSS = {
-    "light": """
-:root {
-    --bg-color: #f6f8fc;
-    --card-bg: #ffffff;
-    --text-color: #1c2434;
-    --muted-color: #6b7280;
-    --accent-color: #f97316;
-}
-body, .stApp {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-[data-testid="stAppViewContainer"] {
-    background-color: var(--bg-color);
-}
-[data-testid="stHeader"] {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-[data-testid="stSidebar"] {
-    background-color: #ffffff !important;
-    color: var(--text-color);
-}
-section.main > div {
-    background-color: transparent;
-}
-.stMarkdown p, .stMarkdown span, .stMetric, label, h1, h2, h3, h4, h5, h6 {
-    color: var(--text-color) !important;
-}
-.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
-    background-color: rgba(249,115,22,0.15);
-    color: var(--text-color);
-}
-.stPlotlyChart {
-    background-color: var(--card-bg) !important;
-    border-radius: 12px;
-    padding: 8px;
-}
-.stPlotlyChart div {
-    background-color: transparent !important;
-}
-.theme-toggle .stRadio > label, .theme-toggle .stRadio div {
-    justify-content: center;
-}
-.theme-toggle .stRadio label {
-    padding-bottom: 4px;
-}
-""",
-    "dark": """
-:root {
-    --bg-color: #0b1120;
-    --card-bg: #111827;
-    --text-color: #f1f5f9;
-    --muted-color: #94a3b8;
-    --accent-color: #f97316;
-}
-body, .stApp {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-[data-testid="stAppViewContainer"] {
-    background-color: var(--bg-color);
-}
-[data-testid="stHeader"] {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-[data-testid="stSidebar"] {
-    background-color: #0f172a !important;
-    color: var(--text-color);
-}
-.stMarkdown p, .stMarkdown span, .stMetric, label, h1, h2, h3, h4, h5, h6 {
-    color: var(--text-color) !important;
-}
-.stTabs [data-baseweb="tab-list"] button {
-    color: var(--muted-color);
-    background-color: rgba(255,255,255,0.05);
-}
-.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
-    color: var(--text-color);
-    background-color: rgba(249,115,22,0.15);
-}
-.stDataFrame, .stTable, .stPlotlyChart, .stMetric {
-    background-color: transparent;
-}
-.stPlotlyChart {
-    background-color: #0f172a !important;
-    border-radius: 12px;
-    padding: 8px;
-}
-.stPlotlyChart div {
-    background-color: transparent !important;
-}
-.theme-toggle .stRadio > label, .theme-toggle .stRadio div {
-    justify-content: center;
-}
-""",
-}
-
-
-def apply_theme(mode: str) -> None:
-    css = THEME_CSS.get(mode, THEME_CSS[DEFAULT_THEME_MODE])
-    st.markdown(f"<style id='refuel-theme'>{css}</style>", unsafe_allow_html=True)
-    if mode == "dark":
-        pio.templates.default = "plotly_dark"
-    else:
-        pio.templates.default = "plotly_white"
-
-
-def render_theme_toggle() -> None:
-    mode = st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE)
-    selection = st.radio(
-        "Theme toggle",
-        options=("🌞", "🌙"),
-        index=0 if mode == "light" else 1,
-        horizontal=True,
-        label_visibility="collapsed",
-        key="theme-toggle",
-        help="Toggle between light and dark mode",
-    )
-    new_mode = "light" if selection == "🌞" else "dark"
-    if new_mode != mode:
-        st.session_state["ui_theme_mode"] = new_mode
-    apply_theme(st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE))
-
-
 def sidebar_info_block() -> None:
     """Standard sidebar header with team + data refresh details."""
     logo_bytes = get_logo_bytes()
@@ -237,8 +103,6 @@ def sidebar_info_block() -> None:
         st.sidebar.image(logo_bytes, width=120)
     st.sidebar.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
     st.sidebar.caption("Data updated every hour · Last refresh from notebook sync.")
-    with st.sidebar:
-        render_theme_toggle()
     st.sidebar.divider()
 
 
