@@ -38,6 +38,7 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
     if ctx is None:
         return
     pages = ctx.pages_manager.get_pages()
+    logo_bytes = get_logo_bytes()
 
     def lookup(path: str) -> Optional[dict]:
         for page in pages.values():
@@ -45,7 +46,13 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
                 return page
         return None
 
-    cols = st.columns(len(nav_items))
+    if logo_bytes:
+        wrapper_cols = st.columns([0.2, 0.8])
+        wrapper_cols[0].image(logo_bytes, width=90)
+        cols = wrapper_cols[1].columns(len(nav_items))
+    else:
+        cols = st.columns(len(nav_items))
+
     for col, item in zip(cols, nav_items):
         page_meta = lookup(item.path)
         if not page_meta:

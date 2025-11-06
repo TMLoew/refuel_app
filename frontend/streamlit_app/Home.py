@@ -199,7 +199,9 @@ with inventory_tab:
         sim_rows: List[dict] = []
         for offset in range(total_days_sim):
             row = daily_summary.iloc[(start_idx + offset) % len(daily_summary)]
-            stock -= row["snack_units"]
+            demand = float(row["snack_units"])
+            sold = min(stock, demand)
+            stock -= sold
             reordered = False
             if auto_reorder and stock <= sim_safety:
                 stock += sim_reorder_qty
@@ -207,7 +209,8 @@ with inventory_tab:
             sim_rows.append(
                 {
                     "date": row["date"].isoformat(),
-                    "demand": round(row["snack_units"], 1),
+                    "demand": round(demand, 1),
+                    "sold": round(sold, 1),
                     "stock_after": round(stock, 1),
                     "reordered": "Yes" if reordered else "",
                 }
@@ -217,6 +220,47 @@ with inventory_tab:
         sim_fig.add_hline(y=sim_safety, line_dash="dot", line_color="orange", annotation_text="Safety stock")
         st.plotly_chart(sim_fig, use_container_width=True)
         st.dataframe(sim_df, use_container_width=True, height=300)
+
+    st.subheader("Automated pricing & weather-aware simulation")
+    conversion_rate = st.number_input(
+        "Visitor→purchase conversion rate", min_value=0.05, max_value=1.0, value=0.35, step=0.05
+    )
+    auto_days = st.slider("Simulation horizon (days)", 7, 90, 28, key="auto-days")
+    auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
+    auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
+    auto_reorder_qty = st.number_input(
+        "Sim reorder quantity", min_value=0.0, value=reorder_point - safety_stock, step=10.0, key="auto-reorder-qty"
+    )
+    run_auto = st.button("Run automated simulation")
+    if run_auto:
+        auto_df = run_auto_simulation(
+            daily_summary,
+            horizon_days=auto_days,
+            starting_stock=current_stock,
+            safety_stock=safety_stock,
+            reorder_qty=auto_reorder_qty,
+            unit_cost=auto_unit_cost,
+            fee=auto_fee,
+            base_price=avg_price,
+            elasticity=elasticity,
+            conversion_rate=conversion_rate,
+        )
+        if auto_df.empty:
+            st.warning("Simulation failed; need more data.")
+        else:
+            st.metric("Total profit", f"€{auto_df['profit'].sum():.0f}")
+            st.metric("Ending stock", f"{auto_df['stock_after'].iloc[-1]:.0f} units")
+            auto_fig = px.line(auto_df, x="date", y="stock_after", title="Automated stock trajectory")
+            auto_fig.add_hline(y=safety_stock, line_dash="dot", line_color="orange", annotation_text="Safety stock")
+            auto_fig.add_scatter(
+                x=auto_df.loc[auto_df["reordered"] == "Yes", "date"],
+                y=auto_df.loc[auto_df["reordered"] == "Yes", "stock_after"],
+                mode="markers",
+                marker=dict(color="green", size=10),
+                name="Reorders",
+            )
+            st.plotly_chart(auto_fig, use_container_width=True)
+            st.dataframe(auto_df, use_container_width=True, height=300)
 
 st.subheader("Day-of-week pricing hints")
 dow_stats = (
@@ -244,3 +288,49 @@ st.table(
     .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (€)"})
     .style.format({"Avg snack units": "{:.1f}", "Suggested price (€)": "€{:.2f}"})
 )
+
+
+def run_auto_simulation(
+    daily_df: pd.DataFrame,
+    horizon_days: int,
+    starting_stock: float,
+    safety_stock: float,
+    reorder_qty: float,
+    unit_cost: float,
+    fee: float,
+    base_price: float,
+    elasticity: float,
+    conversion_rate: float,
+) -> pd.DataFrame:
+    if daily_df.empty:
+        return pd.DataFrame()
+    avg_temp = daily_df["temperature_c"].mean()
+    price_min = base_price * 0.8
+    price_max = base_price * 1.2
+    rows: List[dict] = []
+    stock = starting_stock
+    for offset in range(horizon_days):
+        row = daily_df.iloc[offset % len(daily_df)]
+        temp_adj = 1 + 0.01 * (row["temperature_c"] - avg_temp)
+        price = float(np.clip(base_price * temp_adj, price_min, price_max))
+        demand_base = row["checkins"] * conversion_rate
+        demand = max(0.0, demand_base * (price / base_price) ** elasticity)
+        sold = min(stock, demand)
+        stock -= sold
+        profit = (price - unit_cost - fee) * sold
+        reordered = ""
+        if stock <= safety_stock:
+            stock += reorder_qty
+            reordered = "Yes"
+        rows.append(
+            {
+                "date": row["date"].isoformat(),
+                "price": round(price, 2),
+                "demand_est": round(demand, 1),
+                "sold": round(sold, 1),
+                "profit": round(profit, 2),
+                "stock_after": round(stock, 1),
+                "reordered": reordered,
+            }
+        )
+    return pd.DataFrame(rows)
