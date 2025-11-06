@@ -21,7 +21,7 @@ render_top_nav("Home.py")
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
 
-logo_path = Path(__file__).resolve().parents[1] / "logo.webp"
+logo_path = Path(__file__).resolve().parents[2] / "logo.webp"
 
 with st.sidebar:
     if logo_path.exists():

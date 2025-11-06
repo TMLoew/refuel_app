@@ -58,7 +58,7 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
                     st.switch_page(item.path)
 
 
-LOGO_PATH = Path(__file__).resolve().parents[2] / "logo.webp"
+LOGO_PATH = Path(__file__).resolve().parents[3] / "logo.webp"
 
 
 def sidebar_info_block() -> None:
