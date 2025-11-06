@@ -1,19 +1,17 @@
 from pathlib import Path
 import sys
 
-# Ensure repo root on sys.path for Streamlit Cloud
+# Ensure imports work both locally and on Streamlit Cloud
 ROOT_DIR = Path(__file__).resolve().parents[3]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
+APP_DIR = Path(__file__).resolve().parent
+for path in (ROOT_DIR, APP_DIR):
+    if str(path) not in sys.path:
+        sys.path.append(str(path))
 
 import streamlit as st
 
-try:
-    from frontend.streamlit_app.components.layout import render_top_nav, get_logo_bytes
-    from frontend.streamlit_app.services.data_utils import load_enriched_data
-except ModuleNotFoundError:
-    from components.layout import render_top_nav, get_logo_bytes
-    from services.data_utils import load_enriched_data
+from components.layout import render_top_nav, get_logo_bytes
+from services.data_utils import load_enriched_data
 
 st.set_page_config(page_title="Refuel Control Center", page_icon="🏠", layout="wide")
 
