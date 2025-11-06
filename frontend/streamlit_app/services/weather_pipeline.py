@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Dict, Iterable, List, Sequence, Tuple
 
@@ -121,30 +121,61 @@ def fetch_hourly_weather_frame(
     lat: float = DEFAULT_LAT,
     lon: float = DEFAULT_LON,
     timezone: str = DEFAULT_TZ,
-) -> Tuple[pd.DataFrame, float]:
+) -> Tuple[pd.DataFrame, Dict[str, float]]:
     """
     Retrieve hourly temperature, humidity, and precipitation covering the provided timestamps.
     """
     if not timestamps:
-        return pd.DataFrame()
+        return pd.DataFrame(), {"latency_ms": None, "chunks": 0}
 
-    start_date = min(timestamps).strftime("%Y-%m-%d")
-    end_date = max(timestamps).strftime("%Y-%m-%d")
+    start_dt = min(timestamps).date()
+    end_dt = max(timestamps).date()
+    chunk_days = 14
+    frames: List[pd.DataFrame] = []
+    total_latency = 0.0
+    chunk_count = 0
 
-    payload, latency_ms = _request_hourly_weather(start_date, end_date, lat=lat, lon=lon, timezone=timezone)
-    hourly = payload.get("hourly")
-    if not hourly:
-        raise ValueError("No hourly weather data returned by Open-Meteo")
+    current = start_dt
+    while current <= end_dt:
+        chunk_end = min(current + timedelta(days=chunk_days - 1), end_dt)
+        payload, latency_ms = _request_hourly_weather(
+            current.strftime("%Y-%m-%d"),
+            chunk_end.strftime("%Y-%m-%d"),
+            lat=lat,
+            lon=lon,
+            timezone=timezone,
+        )
+        hourly = payload.get("hourly")
+        if hourly:
+            frame = pd.DataFrame(
+                {
+                    "timestamp": pd.to_datetime(hourly["time"]),
+                    "temperature_c": hourly.get("temperature_2m"),
+                    "humidity_pct": hourly.get("relative_humidity_2m"),
+                    "precipitation_mm": hourly.get("precipitation"),
+                }
+            )
+            frames.append(frame)
+        total_latency += latency_ms
+        chunk_count += 1
+        current = chunk_end + timedelta(days=1)
 
-    frame = pd.DataFrame(
-        {
-            "timestamp": pd.to_datetime(hourly["time"]),
-            "temperature_c": hourly.get("temperature_2m"),
-            "humidity_pct": hourly.get("relative_humidity_2m"),
-            "precipitation_mm": hourly.get("precipitation"),
-        }
+    if not frames:
+        return pd.DataFrame(), {"latency_ms": None, "chunks": chunk_count}
+
+    combined = (
+        pd.concat(frames, ignore_index=True)
+        .drop_duplicates(subset="timestamp")
+        .sort_values("timestamp")
+        .reset_index(drop=True)
     )
-    return frame, latency_ms
+    meta = {
+        "latency_ms": total_latency,
+        "chunks": chunk_count,
+        "coverage_start": combined["timestamp"].min().isoformat(),
+        "coverage_end": combined["timestamp"].max().isoformat(),
+    }
+    return combined, meta
 
 
 class DataPipeline:

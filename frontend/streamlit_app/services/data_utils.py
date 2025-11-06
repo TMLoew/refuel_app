@@ -89,11 +89,11 @@ def load_enriched_data(
     timestamps = tuple(df["timestamp"])
     weather_source = "synthetic"
     weather_frame = pd.DataFrame()
-    latency_ms = None
+    weather_meta_extra: Dict[str, float] = {}
 
     if use_weather_api:
         try:
-            weather_frame, latency_ms = fetch_hourly_weather_frame(timestamps)
+            weather_frame, weather_meta_extra = fetch_hourly_weather_frame(timestamps)
             if not weather_frame.empty:
                 weather_source = "open-meteo"
         except Exception:
@@ -149,9 +149,10 @@ def load_enriched_data(
     df.attrs["weather_meta"] = {
         "source": weather_source,
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-        "coverage_start": df["timestamp"].min().isoformat(),
-        "coverage_end": df["timestamp"].max().isoformat(),
-        "latency_ms": latency_ms,
+        "coverage_start": weather_meta_extra.get("coverage_start", df["timestamp"].min().isoformat()),
+        "coverage_end": weather_meta_extra.get("coverage_end", df["timestamp"].max().isoformat()),
+        "latency_ms": weather_meta_extra.get("latency_ms"),
+        "chunks": weather_meta_extra.get("chunks"),
     }
     return df
 
