@@ -78,7 +78,7 @@ SNACK_FEATURES = CHECKIN_FEATURES + ["checkins"]
 
 
 @st.cache_data(show_spinner=False)
-def load_enriched_data(csv_path: Path) -> pd.DataFrame:
+def load_enriched_data(csv_path: Path, use_weather_api: bool) -> pd.DataFrame:
     """Load gym dataset and enrich it with weather + snack context."""
     if not csv_path.exists():
         return pd.DataFrame()
@@ -96,14 +96,18 @@ def load_enriched_data(csv_path: Path) -> pd.DataFrame:
 
     rng = np.random.default_rng(42)
     timestamps = tuple(df["timestamp"])
-    weather_source = "open-meteo"
-    try:
-        weather_frame = fetch_hourly_weather_frame(timestamps)
-    except Exception:
-        weather_frame = pd.DataFrame()
+    weather_source = "synthetic"
+    weather_frame = pd.DataFrame()
+
+    if use_weather_api:
+        try:
+            weather_frame = fetch_hourly_weather_frame(timestamps)
+            if not weather_frame.empty:
+                weather_source = "open-meteo"
+        except Exception:
+            weather_frame = pd.DataFrame()
 
     if weather_frame.empty:
-        weather_source = "synthetic"
         weather_frame = build_synthetic_weather_frame(timestamps)
 
     df = df.merge(weather_frame, on="timestamp", how="left")
@@ -434,13 +438,17 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
     )
 
 
-def main() -> None:
+def render_dashboard() -> None:
     st.title("Refuel Performance Cockpit")
     st.caption(
         "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."
     )
 
-    data = load_enriched_data(DATA_FILE)
+    st.sidebar.header("Scenario controls")
+    use_weather_api = st.sidebar.toggle("Use live weather API", value=False)
+
+    with st.spinner("Loading telemetry and contextual data..."):
+        data = load_enriched_data(DATA_FILE, use_weather_api)
     if data.empty:
         st.error("No gym data found yet. Drop a CSV into `data/gym_badges.csv` to get started.")
         return
@@ -449,10 +457,11 @@ def main() -> None:
     st.caption(
         f"Weather source · {'Open-Meteo API' if weather_source == 'open-meteo' else 'synthetic fallback'}"
     )
+    if use_weather_api and weather_source != "open-meteo":
+        st.warning("Live weather API unreachable. Using synthetic fallback instead.")
 
     models = train_models(data)
 
-    st.sidebar.header("Scenario controls")
     horizon_hours = st.sidebar.slider("Forecast horizon (hours)", min_value=6, max_value=72, value=24, step=6)
     weather_pattern = st.sidebar.selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()))
     temp_manual = st.sidebar.slider("Manual temperature shift (°C)", min_value=-8, max_value=8, value=0)
@@ -500,5 +509,13 @@ def main() -> None:
     render_forecast_section(data, forecast_df)
 
 
-if __name__ == "__main__":
-    main()
+def _safe_render() -> None:
+    try:
+        render_dashboard()
+    except Exception as exc:
+        st.error("The dashboard crashed while rendering. See details below and please share this trace.")
+        st.exception(exc)
+        raise
+
+
+_safe_render()

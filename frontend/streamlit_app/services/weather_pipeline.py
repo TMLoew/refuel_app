@@ -16,7 +16,11 @@ from typing import Dict, Iterable, List, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-import requests
+
+try:
+    import requests
+except ModuleNotFoundError:
+    requests = None
 
 DEFAULT_LAT = 47.4239
 DEFAULT_LON = 9.3748
@@ -61,11 +65,19 @@ def month_to_season(month: int) -> str:
     return "Autumn"
 
 
+def _ensure_requests() -> None:
+    if requests is None:
+        raise RuntimeError(
+            "The `requests` package is required for live weather calls. Install it or disable the live weather toggle."
+        )
+
+
 @lru_cache(maxsize=32)
 def get_daily_temp(date_str: str, lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON) -> float:
     """
     Fetch the maximum daily temperature for a local date.
     """
+    _ensure_requests()
     url = (
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
@@ -88,6 +100,7 @@ def _request_hourly_weather(
     lon: float = DEFAULT_LON,
     timezone: str = DEFAULT_TZ,
 ) -> Dict:
+    _ensure_requests()
     url = (
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
