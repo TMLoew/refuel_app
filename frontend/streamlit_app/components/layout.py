@@ -44,6 +44,9 @@ def render_top_nav(
     if ctx is None:
         return
     pages = ctx.pages_manager.get_pages()
+    if "ui_theme_mode" not in st.session_state:
+        st.session_state["ui_theme_mode"] = DEFAULT_THEME_MODE
+        st.session_state["theme-toggle"] = "🌞"
     apply_theme(st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE))
     logo_bytes = get_logo_bytes() if show_logo else None
 
