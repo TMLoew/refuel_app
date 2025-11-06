@@ -29,15 +29,17 @@ if data.empty:
     st.error("Upload `data/gym_badges.csv` to start exploring the dataset.")
     st.stop()
 
-date_min, date_max = data["timestamp"].min(), data["timestamp"].max()
+ts_min = data["timestamp"].min()
+ts_max = data["timestamp"].max()
+date_min, date_max = ts_min.to_pydatetime(), ts_max.to_pydatetime()
 selected_range = st.slider(
     "Select date window",
     min_value=date_min,
     max_value=date_max,
-    value=(date_max - pd.Timedelta(days=3), date_max),
+    value=((ts_max - pd.Timedelta(days=3)).to_pydatetime(), date_max),
     format="YYYY-MM-DD",
 )
-mask = data["timestamp"].between(*selected_range)
+mask = data["timestamp"].between(pd.Timestamp(selected_range[0]), pd.Timestamp(selected_range[1]))
 
 st.subheader("Editable grid")
 edited = st.data_editor(
