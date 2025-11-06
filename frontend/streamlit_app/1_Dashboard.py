@@ -10,13 +10,22 @@ from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from frontend.streamlit_app.services.weather_pipeline import (
-    Ingredient,
-    build_synthetic_weather_frame,
-    fetch_hourly_weather_frame,
-    month_to_season,
-    seasonality,
-)
+try:
+    from frontend.streamlit_app.services.weather_pipeline import (
+        Ingredient,
+        build_synthetic_weather_frame,
+        fetch_hourly_weather_frame,
+        month_to_season,
+        seasonality,
+    )
+except ModuleNotFoundError:
+    from services.weather_pipeline import (
+        Ingredient,
+        build_synthetic_weather_frame,
+        fetch_hourly_weather_frame,
+        month_to_season,
+        seasonality,
+    )
 
 st.set_page_config(
     page_title="Refuel Ops Dashboard",
