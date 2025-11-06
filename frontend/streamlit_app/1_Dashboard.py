@@ -19,6 +19,16 @@ try:
         seasonality,
     )
 except ModuleNotFoundError:
+    import sys
+
+    current_dir = Path(__file__).resolve().parent
+    services_dir = current_dir / "services"
+    package_root = current_dir
+    for path in (current_dir, services_dir, package_root.parent):
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.append(path_str)
+
     from services.weather_pipeline import (
         Ingredient,
         build_synthetic_weather_frame,
