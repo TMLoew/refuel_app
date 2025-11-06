@@ -86,9 +86,35 @@ with col_right:
     safety_stock = st.number_input(
         "Safety stock threshold", min_value=0.0, value=round(avg_units * 2, 1), step=5.0
     )
+    reorder_point = safety_stock * 1.2
     projected_units = demand_curve[-1]
     st.metric("Projected demand at highest price", f"{projected_units:.0f} units")
+    stock_fig = px.bar(
+        x=["Current"],
+        y=[current_stock],
+        labels={"x": "", "y": "Units"},
+        title="Stock vs. safety bands",
+    )
+    stock_fig.add_hrect(
+        y0=safety_stock,
+        y1=safety_stock,
+        line_width=2,
+        line_color="orange",
+        annotation_text="Safety stock",
+        annotation_position="top right",
+    )
+    stock_fig.add_hrect(
+        y0=reorder_point,
+        y1=reorder_point,
+        line_width=2,
+        line_color="red",
+        annotation_text="Reorder point",
+        annotation_position="bottom right",
+    )
+    st.plotly_chart(stock_fig, use_container_width=True)
     if current_stock <= safety_stock:
         st.error("Low stock alert: inventory below safety threshold!")
+    elif current_stock <= reorder_point:
+        st.warning("Stock above safety but heading toward reorder point.")
     else:
         st.success("Stock level healthy. No alert triggered.")
