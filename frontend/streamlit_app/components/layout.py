@@ -12,37 +12,27 @@ import streamlit as st
 class NavItem:
     label: str
     emoji: str
-    root_path: str
-    page_path: str
-
-    def path_for(self, context: str) -> str:
-        return self.root_path if context == "root" else self.page_path
+    path: str
 
 
 DEFAULT_NAV: List[NavItem] = [
-    NavItem("Home", "🏠", "frontend/streamlit_app/Home.py", "Home.py"),
-    NavItem("Dashboard", "📊", "frontend/streamlit_app/pages/1_Dashboard.py", "1_Dashboard.py"),
-    NavItem("Forecasts", "🔮", "frontend/streamlit_app/pages/2_Forecasts.py", "2_Forecasts.py"),
-    NavItem("What-if Lab", "🧪", "frontend/streamlit_app/pages/3_WhatIf_Sim.py", "3_WhatIf_Sim.py"),
-    NavItem("Data Editor", "📝", "frontend/streamlit_app/pages/4_Data_Editor.py", "4_Data_Editor.py"),
-    NavItem("Settings", "⚙️", "frontend/streamlit_app/pages/5_Settings_APIs.py", "5_Settings_APIs.py"),
+    NavItem("Home", "🏠", "Home.py"),
+    NavItem("Dashboard", "📊", "pages/1_Dashboard.py"),
+    NavItem("Forecasts", "🔮", "pages/2_Forecasts.py"),
+    NavItem("What-if Lab", "🧪", "pages/3_WhatIf_Sim.py"),
+    NavItem("Data Editor", "📝", "pages/4_Data_Editor.py"),
+    NavItem("Settings", "⚙️", "pages/5_Settings_APIs.py"),
 ]
 
 
-def render_top_nav(
-    active_page: str,
-    *,
-    context: str = "root",
-    nav_items: Iterable[NavItem] = DEFAULT_NAV,
-) -> None:
+def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV) -> None:
     """Render a top navigation bar using Streamlit's page links."""
     nav_items = list(nav_items)
     cols = st.columns(len(nav_items))
     for col, item in zip(cols, nav_items):
-        path = item.path_for(context)
         with col:
             st.page_link(
-                path,
+                item.path,
                 label=item.label,
                 icon=item.emoji,
                 use_container_width=True,

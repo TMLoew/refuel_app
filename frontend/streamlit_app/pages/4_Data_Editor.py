@@ -14,7 +14,7 @@ from frontend.streamlit_app.services.data_utils import DATA_FILE, load_enriched_
 
 st.set_page_config(page_title="Data Workbench", page_icon="📝", layout="wide")
 
-render_top_nav("4_Data_Editor.py", context="pages")
+render_top_nav("4_Data_Editor.py")
 st.title("Data Workbench")
 st.caption("Inspect, annotate, and experiment with the telemetry tables feeding the dashboards.")
 

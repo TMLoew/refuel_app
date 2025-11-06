@@ -206,7 +206,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
 
 
 def render_dashboard() -> None:
-    render_top_nav("1_Dashboard.py", context="pages")
+    render_top_nav("1_Dashboard.py")
     st.title("Refuel Performance Cockpit")
     st.caption(
         "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."
