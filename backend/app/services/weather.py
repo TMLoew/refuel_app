@@ -127,7 +127,7 @@ def summary(merged_rows: list) -> str:
     ]
     return "\n".join(lines)
 
-if _name_ == "_main_":
+if _name_ == "__main__":
     print("Products:", products_set)
     banana = Ingredient("Banana", 2.5)
     pipe = DataPipeline(banana, sales_data, gym_data)
