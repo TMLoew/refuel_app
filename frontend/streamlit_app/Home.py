@@ -222,28 +222,36 @@ with inventory_tab:
         st.dataframe(sim_df, use_container_width=True, height=300)
 
     st.subheader("Automated pricing & weather-aware simulation")
-    conversion_rate = st.number_input(
-        "Visitor→purchase conversion rate", min_value=0.05, max_value=1.0, value=0.35, step=0.05
-    )
+    derived_conversion = float(data["snack_units"].sum()) / max(float(data["checkins"].sum()), 1.0)
+    derived_conversion = float(np.clip(derived_conversion, 0.05, 0.9))
     auto_days = st.slider("Simulation horizon (days)", 7, 90, 28, key="auto-days")
+    lead_time_auto = 7
+    service_factor = 1.65
+    demand_std = float(daily_summary["snack_units"].std() or avg_units * 0.1)
+    mean_checkins = float(daily_summary["checkins"].mean())
+    lead_time_demand = derived_conversion * mean_checkins * lead_time_auto
+    safety_auto = max(0.0, lead_time_demand + service_factor * demand_std * np.sqrt(lead_time_auto))
+    reorder_qty_auto = safety_auto + lead_time_demand
+    starting_auto = reorder_qty_auto * 2
     auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
     auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
-    auto_reorder_qty = st.number_input(
-        "Sim reorder quantity", min_value=0.0, value=reorder_point - safety_stock, step=10.0, key="auto-reorder-qty"
-    )
-    run_auto = st.button("Run automated simulation")
+    cola, colb, colc = st.columns(3)
+    cola.metric("Derived conversion", f"{derived_conversion:.2f}")
+    colb.metric("Recommended safety stock", f"{safety_auto:.0f} units")
+    colc.metric("Recommended reorder qty", f"{reorder_qty_auto:.0f} units")
+    run_auto = st.button("Simulate automated plan")
     if run_auto:
         auto_df = run_auto_simulation(
             daily_summary,
             horizon_days=auto_days,
-            starting_stock=current_stock,
-            safety_stock=safety_stock,
-            reorder_qty=auto_reorder_qty,
+            starting_stock=starting_auto,
+            safety_stock=safety_auto,
+            reorder_qty=reorder_qty_auto,
             unit_cost=auto_unit_cost,
             fee=auto_fee,
             base_price=avg_price,
             elasticity=elasticity,
-            conversion_rate=conversion_rate,
+            conversion_rate=derived_conversion,
         )
         if auto_df.empty:
             st.warning("Simulation failed; need more data.")
