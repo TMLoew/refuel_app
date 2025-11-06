@@ -334,7 +334,7 @@ def render_inventory_game(df: pd.DataFrame) -> None:
 
 
 def render_dashboard() -> None:
-    render_top_nav("1_Dashboard.py")
+    render_top_nav("1_Dashboard.py", show_logo=False)
     st.title("Refuel Performance Cockpit")
     st.caption(
         "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."

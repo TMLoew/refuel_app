@@ -214,15 +214,14 @@ def render_theme_toggle() -> None:
     mode = st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE)
     selection = st.radio(
         "Theme toggle",
-        options=("light", "dark"),
+        options=("🌞", "🌙"),
         index=0 if mode == "light" else 1,
         horizontal=True,
         label_visibility="collapsed",
         key="theme-toggle",
         help="Toggle between light and dark mode",
-        format_func=lambda opt: "🌞" if opt == "light" else "🌙",
     )
-    new_mode = selection
+    new_mode = "light" if selection == "🌞" else "dark"
     if new_mode != mode:
         st.session_state["ui_theme_mode"] = new_mode
     apply_theme(st.session_state.get("ui_theme_mode", DEFAULT_THEME_MODE))
