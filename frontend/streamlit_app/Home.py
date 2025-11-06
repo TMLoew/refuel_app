@@ -9,10 +9,10 @@ if str(ROOT_DIR) not in sys.path:
 import streamlit as st
 
 try:
-    from frontend.streamlit_app.components.layout import render_top_nav
+    from frontend.streamlit_app.components.layout import render_top_nav, get_logo_bytes
     from frontend.streamlit_app.services.data_utils import load_enriched_data
 except ModuleNotFoundError:
-    from components.layout import render_top_nav
+    from components.layout import render_top_nav, get_logo_bytes
     from services.data_utils import load_enriched_data
 
 st.set_page_config(page_title="Refuel Control Center", page_icon="🏠", layout="wide")
@@ -21,12 +21,11 @@ render_top_nav("Home.py")
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
 
-logo_path = Path(__file__).resolve().parents[2] / "logo.webp"
-
 with st.sidebar:
-    if logo_path.exists():
-        st.image(str(logo_path), width=120)
-    st.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
+    logo_bytes = get_logo_bytes()
+    if logo_bytes:
+        st.image(logo_bytes, width=120)
+    st.markdown("Live telemetry cockpit")
     st.caption("Data updated every hour · Last refresh from notebook sync.")
     st.divider()
     st.subheader("Data slice")

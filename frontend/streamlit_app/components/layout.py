@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional
 
@@ -61,10 +62,18 @@ def render_top_nav(active_page: str, nav_items: Iterable[NavItem] = DEFAULT_NAV)
 LOGO_PATH = Path(__file__).resolve().parents[3] / "logo.webp"
 
 
+@lru_cache(maxsize=1)
+def get_logo_bytes() -> Optional[bytes]:
+    if LOGO_PATH.exists():
+        return LOGO_PATH.read_bytes()
+    return None
+
+
 def sidebar_info_block() -> None:
     """Standard sidebar header with team + data refresh details."""
-    if LOGO_PATH.exists():
-        st.sidebar.image(str(LOGO_PATH), width=120)
+    logo_bytes = get_logo_bytes()
+    if logo_bytes:
+        st.sidebar.image(logo_bytes, width=120)
     st.sidebar.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
     st.sidebar.caption("Data updated every hour · Last refresh from notebook sync.")
     st.sidebar.divider()

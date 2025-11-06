@@ -31,6 +31,15 @@ with st.sidebar:
     use_weather_api = st.toggle("Use live weather API", value=False, key="forecast-weather")
     lookback_days = st.slider("History window (days)", 3, 14, 7)
     metric_focus = st.selectbox("Focus metric", ["checkins", "snack_units", "snack_revenue"])
+    with st.expander("Snacks ↔ visits settings", expanded=False):
+        snack_agg_mode = st.radio("Aggregation", ["Hourly", "Daily"], horizontal=True, key="snack-agg")
+        color_dim = st.selectbox(
+            "Color points by",
+            ["weekday", "weather_label", "is_weekend"],
+            index=0,
+            key="snack-color",
+        )
+        min_checkins = st.slider("Min. check-ins to include", 0, 50, 5, key="snack-min-checkins")
 
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
@@ -92,6 +101,35 @@ corr_fig = px.imshow(
     title="Correlation matrix: weather vs. demand",
 )
 st.plotly_chart(corr_fig, use_container_width=True)
+
+# --- Snack vs visit correlation explorer ---------------------------------------
+if snack_agg_mode == "Daily":
+    snack_df = history.resample("D", on="timestamp").agg(
+        {"checkins": "sum", "snack_units": "sum", "temperature_c": "mean", "weekday": "first", "is_weekend": "max"}
+    )
+    snack_df["weather_label"] = history.resample("D", on="timestamp")["weather_label"].agg(lambda x: x.mode().iloc[0])
+else:
+    snack_df = history.copy()
+
+snack_df = snack_df[snack_df["checkins"] >= min_checkins]
+
+if not snack_df.empty:
+    corr_value = snack_df["checkins"].corr(snack_df["snack_units"])
+    st.subheader("Snack demand vs. visit load")
+    st.caption("Tune the controls in the sidebar to slice the correlation by aggregation or filters.")
+    st.metric("Pearson correlation", f"{corr_value:.2f}" if not pd.isna(corr_value) else "n/a")
+    color_field = color_dim if color_dim in snack_df.columns else None
+    scatter_fig = px.scatter(
+        snack_df,
+        x="checkins",
+        y="snack_units",
+        color=color_field,
+        trendline="ols",
+        labels={"checkins": "Gym check-ins", "snack_units": "Snack units"},
+        title="Snacks vs. visits",
+        hover_data=["temperature_c"],
+    )
+    st.plotly_chart(scatter_fig, use_container_width=True)
 
 # --- Feature sensitivity --------------------------------------------------------
 checkin_model, snack_model = models
