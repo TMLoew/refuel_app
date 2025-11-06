@@ -73,90 +73,149 @@ st.info(
     "Use the navigation bar to jump into specific tools. The sidebar controls above mirror the default data slice you can apply inside each module."
 )
 
-st.divider()
-st.subheader("Snack Pricing & Elasticity Sandbox")
+pricing_tab, inventory_tab = st.tabs(["Pricing & Elasticity", "Inventory Planner"])
 
-avg_price = float(data["snack_price"].mean())
-avg_units = float(data["snack_units"].mean())
-col_left, col_right = st.columns(2)
-with col_left:
-    elasticity = st.slider("Elasticity factor (negative means demand drops with price)", -3.0, 1.0, -1.2, step=0.1)
-    price_range_pct = st.slider("Price adjustment range (%)", 10, 60, 30, step=5)
-    promo_boost = st.slider("Promo boost on demand (%)", 0, 100, 15, step=5)
-    preferred_price = st.number_input("Test price (€)", min_value=0.5, max_value=10.0, value=round(avg_price, 2), step=0.1)
+with pricing_tab:
+    st.subheader("Snack Pricing & Elasticity Sandbox")
 
-price_points = np.linspace(avg_price * (1 - price_range_pct / 100), avg_price * (1 + price_range_pct / 100), 40)
-demand_curve = avg_units * (price_points / avg_price) ** elasticity * (1 + promo_boost / 100)
-elasticity_fig = px.line(
-    x=price_points,
-    y=demand_curve,
-    labels={"x": "Price (€)", "y": "Expected snack units"},
-    title="Elasticity curve",
-)
-st.plotly_chart(elasticity_fig, use_container_width=True)
-expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity * (1 + promo_boost / 100)
-st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
+    avg_price = float(data["snack_price"].mean())
+    avg_units = float(data["snack_units"].mean())
+    col_left, col_right = st.columns(2)
+    with col_left:
+        elasticity = st.slider("Elasticity factor (negative means demand drops with price)", -3.0, 1.0, -1.2, step=0.1)
+        price_range_pct = st.slider("Price adjustment range (%)", 10, 60, 30, step=5)
+        promo_boost = st.slider("Promo boost on demand (%)", 0, 100, 15, step=5)
+        preferred_price = st.number_input("Test price (€)", min_value=0.5, max_value=10.0, value=round(avg_price, 2), step=0.1)
 
-st.subheader("Profit maximizer")
-unit_cost = st.number_input("Unit cost (€)", min_value=0.1, value=round(avg_price * 0.6, 2), step=0.1)
-operating_fee = st.slider("Per-transaction fee (€)", 0.0, 2.0, 0.2, step=0.1)
-margin_curve = (price_points - unit_cost - operating_fee) * demand_curve
-optimal_idx = int(np.argmax(margin_curve))
-optimal_price = price_points[optimal_idx]
-optimal_units = demand_curve[optimal_idx]
-optimal_profit = margin_curve[optimal_idx]
-st.write(
-    f"At €{optimal_price:.2f}, expected demand is {optimal_units:.0f} units and projected profit is €{optimal_profit:.0f} / period."
-)
-profit_fig = px.line(
-    x=price_points,
-    y=margin_curve,
-    labels={"x": "Price (€)", "y": "Profit"},
-    title="Profit vs. price",
-)
-profit_fig.add_vline(x=optimal_price, line_dash="dash", line_color="green", annotation_text="Optimal")
-profit_fig.add_vline(x=preferred_price, line_dash="dot", line_color="blue", annotation_text="Test price")
-st.plotly_chart(profit_fig, use_container_width=True)
+    price_points = np.linspace(avg_price * (1 - price_range_pct / 100), avg_price * (1 + price_range_pct / 100), 40)
+    demand_curve = avg_units * (price_points / avg_price) ** elasticity * (1 + promo_boost / 100)
+    elasticity_fig = px.line(
+        x=price_points,
+        y=demand_curve,
+        labels={"x": "Price (€)", "y": "Expected snack units"},
+        title="Elasticity curve",
+    )
+    st.plotly_chart(elasticity_fig, use_container_width=True)
+    expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity * (1 + promo_boost / 100)
+    st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
 
-with col_right:
-    current_stock = st.number_input("Current snack stock (units)", min_value=0.0, value=round(avg_units * 5, 1), step=10.0)
-    safety_stock = st.number_input(
-        "Safety stock threshold", min_value=0.0, value=round(avg_units * 2, 1), step=5.0
+    st.subheader("Profit maximizer")
+    unit_cost = st.number_input("Unit cost (€)", min_value=0.1, value=round(avg_price * 0.6, 2), step=0.1)
+    operating_fee = st.slider("Per-transaction fee (€)", 0.0, 2.0, 0.2, step=0.1)
+    margin_curve = (price_points - unit_cost - operating_fee) * demand_curve
+    optimal_idx = int(np.argmax(margin_curve))
+    optimal_price = price_points[optimal_idx]
+    optimal_units = demand_curve[optimal_idx]
+    optimal_profit = margin_curve[optimal_idx]
+    st.write(
+        f"At €{optimal_price:.2f}, expected demand is {optimal_units:.0f} units and projected profit is €{optimal_profit:.0f} / period."
     )
-    lead_time_days = st.slider("Reorder lead time (days)", min_value=1, max_value=30, value=7, step=1)
-    lead_time_demand = avg_units * lead_time_days
-    reorder_point = safety_stock + lead_time_demand
-    projected_units = demand_curve[-1]
-    st.metric("Projected demand at highest price", f"{projected_units:.0f} units")
-    stock_fig = px.bar(
-        x=["Current"],
-        y=[current_stock],
-        labels={"x": "", "y": "Units"},
-        title="Stock vs. safety bands",
+    profit_fig = px.line(
+        x=price_points,
+        y=margin_curve,
+        labels={"x": "Price (€)", "y": "Profit"},
+        title="Profit vs. price",
     )
-    stock_fig.add_hrect(
-        y0=safety_stock,
-        y1=safety_stock,
-        line_width=2,
-        line_color="orange",
-        annotation_text="Safety stock",
-        annotation_position="top right",
+    profit_fig.add_vline(x=optimal_price, line_dash="dash", line_color="green", annotation_text="Optimal")
+    profit_fig.add_vline(x=preferred_price, line_dash="dot", line_color="blue", annotation_text="Test price")
+    st.plotly_chart(profit_fig, use_container_width=True)
+
+with inventory_tab:
+    st.subheader("Inventory planner")
+    with st.container():
+        avg_price = float(data["snack_price"].mean())
+        avg_units = float(data["snack_units"].mean())
+        current_stock = st.number_input("Current snack stock (units)", min_value=0.0, value=round(avg_units * 5, 1), step=10.0)
+        safety_stock = st.number_input(
+            "Safety stock threshold", min_value=0.0, value=round(avg_units * 2, 1), step=5.0
+        )
+        lead_time_days = st.slider("Reorder lead time (days)", min_value=1, max_value=30, value=7, step=1)
+        lead_time_demand = avg_units * lead_time_days
+        reorder_point = safety_stock + lead_time_demand
+        stock_fig = px.bar(
+            x=["Current"],
+            y=[current_stock],
+            labels={"x": "", "y": "Units"},
+            title="Stock vs. safety bands",
+        )
+        stock_fig.add_hrect(
+            y0=safety_stock,
+            y1=safety_stock,
+            line_width=2,
+            line_color="orange",
+            annotation_text="Safety stock",
+            annotation_position="top right",
+        )
+        stock_fig.add_hrect(
+            y0=reorder_point,
+            y1=reorder_point,
+            line_width=2,
+            line_color="red",
+            annotation_text="Reorder point",
+            annotation_position="bottom right",
+        )
+        st.plotly_chart(stock_fig, use_container_width=True)
+        if current_stock <= safety_stock:
+            st.error("Low stock alert: inventory below safety threshold!")
+        elif current_stock <= reorder_point:
+            st.warning("Stock above safety but heading toward reorder point.")
+        else:
+            st.success("Stock level healthy. No alert triggered.")
+
+    st.subheader("Auto restock guidance")
+    rolling_daily = daily_summary["snack_units"].rolling(7, min_periods=1).mean().iloc[-1]
+    auto_stock = st.number_input("Auto-stock level (units)", min_value=0.0, value=current_stock, step=10.0, key="auto-stock")
+    auto_lead = st.slider("Auto lead time (days)", 1, 21, lead_time_days, key="auto-lead")
+    service_buffer = st.slider("Buffer after delivery (days)", 1, 14, 3, key="auto-buffer")
+    days_until_out = auto_stock / max(rolling_daily, 1)
+    recommended_order_in = max(0.0, days_until_out - auto_lead)
+    recommended_qty = max(0.0, (auto_lead + service_buffer) * rolling_daily - auto_stock)
+    col_a, col_b = st.columns(2)
+    col_a.metric("Days until stockout", f"{days_until_out:.1f} d")
+    col_b.metric("Recommended reorder in", f"{recommended_order_in:.1f} d")
+    st.write(
+        f"Order ~**{recommended_qty:.0f} units** to cover lead time + buffer at the current daily run rate of {rolling_daily:.0f} units."
     )
-    stock_fig.add_hrect(
-        y0=reorder_point,
-        y1=reorder_point,
-        line_width=2,
-        line_color="red",
-        annotation_text="Reorder point",
-        annotation_position="bottom right",
-    )
-    st.plotly_chart(stock_fig, use_container_width=True)
-    if current_stock <= safety_stock:
-        st.error("Low stock alert: inventory below safety threshold!")
-    elif current_stock <= reorder_point:
-        st.warning("Stock above safety but heading toward reorder point.")
+
+    st.subheader("Historic week simulator")
+    if daily_summary.empty:
+        st.info("Need daily history to run the simulator.")
     else:
-        st.success("Stock level healthy. No alert triggered.")
+        dates_sorted = sorted(daily_summary["date"].unique())
+        start_date = st.select_slider("Simulation start date", options=dates_sorted, value=dates_sorted[0])
+        sim_weeks = st.slider("Number of weeks", 1, 12, 4)
+        sim_stock = st.number_input("Simulation starting stock", min_value=0.0, value=current_stock, step=10.0, key="sim-stock")
+        sim_safety = st.number_input("Simulation safety stock", min_value=0.0, value=safety_stock, step=5.0, key="sim-safety")
+        sim_lead = st.slider("Simulation reorder lead (days)", 1, 21, lead_time_days, key="sim-lead")
+        sim_reorder_qty = st.number_input(
+            "Simulation reorder quantity", min_value=0.0, value=reorder_point - safety_stock, step=10.0, key="sim-reorder"
+        )
+        auto_reorder = st.checkbox("Auto reorder when below safety", value=True, key="sim-auto")
+
+        start_idx = daily_summary.index[daily_summary["date"] == start_date][0]
+        total_days_sim = sim_weeks * 7
+        stock = sim_stock
+        sim_rows: List[dict] = []
+        for offset in range(total_days_sim):
+            row = daily_summary.iloc[(start_idx + offset) % len(daily_summary)]
+            stock -= row["snack_units"]
+            reordered = False
+            if auto_reorder and stock <= sim_safety:
+                stock += sim_reorder_qty
+                reordered = True
+            sim_rows.append(
+                {
+                    "date": row["date"].isoformat(),
+                    "demand": round(row["snack_units"], 1),
+                    "stock_after": round(stock, 1),
+                    "reordered": "Yes" if reordered else "",
+                }
+            )
+        sim_df = pd.DataFrame(sim_rows)
+        sim_fig = px.line(sim_df, x="date", y="stock_after", title="Simulated stock over historic weeks")
+        sim_fig.add_hline(y=sim_safety, line_dash="dot", line_color="orange", annotation_text="Safety stock")
+        st.plotly_chart(sim_fig, use_container_width=True)
+        st.dataframe(sim_df, use_container_width=True, height=300)
 
 st.subheader("Day-of-week pricing hints")
 dow_stats = (
@@ -184,58 +243,3 @@ st.table(
     .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (€)"})
     .style.format({"Avg snack units": "{:.1f}", "Suggested price (€)": "€{:.2f}"})
 )
-
-st.subheader("Auto restock guidance")
-rolling_daily = daily_summary["snack_units"].rolling(7, min_periods=1).mean().iloc[-1]
-auto_stock = st.number_input("Auto-stock level (units)", min_value=0.0, value=current_stock, step=10.0, key="auto-stock")
-auto_lead = st.slider("Auto lead time (days)", 1, 21, lead_time_days, key="auto-lead")
-service_buffer = st.slider("Buffer after delivery (days)", 1, 14, 3, key="auto-buffer")
-days_until_out = auto_stock / max(rolling_daily, 1)
-recommended_order_in = max(0.0, days_until_out - auto_lead)
-recommended_qty = max(0.0, (auto_lead + service_buffer) * rolling_daily - auto_stock)
-col_a, col_b = st.columns(2)
-col_a.metric("Days until stockout", f"{days_until_out:.1f} d")
-col_b.metric("Recommended reorder in", f"{recommended_order_in:.1f} d")
-st.write(
-    f"Order ~**{recommended_qty:.0f} units** to cover lead time + buffer at the current daily run rate of {rolling_daily:.0f} units."
-)
-
-st.subheader("Historic week simulator")
-if daily_summary.empty:
-    st.info("Need daily history to run the simulator.")
-else:
-    dates_sorted = sorted(daily_summary["date"].unique())
-    start_date = st.select_slider("Simulation start date", options=dates_sorted, value=dates_sorted[0])
-    sim_weeks = st.slider("Number of weeks", 1, 12, 4)
-    sim_stock = st.number_input("Simulation starting stock", min_value=0.0, value=current_stock, step=10.0, key="sim-stock")
-    sim_safety = st.number_input("Simulation safety stock", min_value=0.0, value=safety_stock, step=5.0, key="sim-safety")
-    sim_lead = st.slider("Simulation reorder lead (days)", 1, 21, lead_time_days, key="sim-lead")
-    sim_reorder_qty = st.number_input(
-        "Simulation reorder quantity", min_value=0.0, value=reorder_point - safety_stock, step=10.0, key="sim-reorder"
-    )
-    auto_reorder = st.checkbox("Auto reorder when below safety", value=True, key="sim-auto")
-
-    start_idx = daily_summary.index[daily_summary["date"] == start_date][0]
-    total_days_sim = sim_weeks * 7
-    stock = sim_stock
-    sim_rows: List[dict] = []
-    for offset in range(total_days_sim):
-        row = daily_summary.iloc[(start_idx + offset) % len(daily_summary)]
-        stock -= row["snack_units"]
-        reordered = False
-        if auto_reorder and stock <= sim_safety:
-            stock += sim_reorder_qty
-            reordered = True
-        sim_rows.append(
-            {
-                "date": row["date"].isoformat(),
-                "demand": round(row["snack_units"], 1),
-                "stock_after": round(stock, 1),
-                "reordered": "Yes" if reordered else "",
-            }
-        )
-    sim_df = pd.DataFrame(sim_rows)
-    sim_fig = px.line(sim_df, x="date", y="stock_after", title="Simulated stock over historic weeks")
-    sim_fig.add_hline(y=sim_safety, line_dash="dot", line_color="orange", annotation_text="Safety stock")
-    st.plotly_chart(sim_fig, use_container_width=True)
-    st.dataframe(sim_df, use_container_width=True, height=300)
