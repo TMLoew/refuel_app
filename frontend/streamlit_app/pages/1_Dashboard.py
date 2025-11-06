@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+from datetime import datetime, timezone
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
@@ -41,8 +42,8 @@ def render_summary_cards(df: pd.DataFrame) -> None:
     )
 
 
-def render_history_charts(df: pd.DataFrame) -> None:
-    history_window = df[df["timestamp"] >= df["timestamp"].max() - pd.Timedelta(days=5)]
+def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
+    history_window = df[df["timestamp"] >= df["timestamp"].max() - pd.Timedelta(days=window_days)]
     usage_fig = go.Figure()
     usage_fig.add_trace(
         go.Scatter(
@@ -216,16 +217,31 @@ def render_dashboard() -> None:
         sidebar_info_block()
         st.subheader("Scenario controls")
         use_weather_api = st.toggle("Use live weather API", value=False)
+        refresh_weather = st.button("🔄 Refresh weather data", use_container_width=True)
 
+    cache_buster = datetime.now(timezone.utc).timestamp() if refresh_weather else 0.0
     with st.spinner("Loading telemetry and contextual data..."):
-        data = load_enriched_data(use_weather_api=use_weather_api)
+        data = load_enriched_data(use_weather_api=use_weather_api, cache_buster=cache_buster)
     if data.empty:
         st.error("No gym data found yet. Drop a CSV into `data/gym_badges.csv` to get started.")
         return
 
+    total_days = max(1, int((data["timestamp"].max() - data["timestamp"].min()).days) or 1)
+    history_days = st.sidebar.slider(
+        "History window (days)",
+        min_value=3,
+        max_value=max(3, total_days),
+        value=min(7, max(3, total_days)),
+    )
+
     weather_source = data.attrs.get("weather_source", "synthetic")
+    weather_meta = data.attrs.get("weather_meta", {})
     st.caption(
         f"Weather source · {'Open-Meteo API' if weather_source == 'open-meteo' else 'synthetic fallback'}"
+    )
+    if weather_meta:
+        st.caption(
+            f"Weather last synced {weather_meta.get('updated_at', 'n/a')} UTC · coverage {weather_meta.get('coverage_start', '?')} → {weather_meta.get('coverage_end', '?')}"
     )
     if use_weather_api and weather_source != "open-meteo":
         st.warning("Live weather API unreachable. Using synthetic fallback instead.")
@@ -277,7 +293,7 @@ def render_dashboard() -> None:
     }
 
     render_summary_cards(data)
-    render_history_charts(data)
+    render_history_charts(data, history_days)
 
     forecast_df = build_scenario_forecast(data, models, scenario)
     st.subheader("What-if forecast")

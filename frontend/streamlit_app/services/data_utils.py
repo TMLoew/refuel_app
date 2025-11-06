@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -55,8 +56,13 @@ SNACK_FEATURES = CHECKIN_FEATURES + ["checkins"]
 
 
 @st.cache_data(show_spinner=False)
-def load_enriched_data(csv_path: Path = DATA_FILE, use_weather_api: bool = False) -> pd.DataFrame:
+def load_enriched_data(
+    csv_path: Path = DATA_FILE,
+    use_weather_api: bool = False,
+    cache_buster: float = 0.0,
+) -> pd.DataFrame:
     """Load gym dataset and enrich it with weather + snack context."""
+    _ = cache_buster  # ensures cache invalidation when requested
     if not csv_path.exists():
         return pd.DataFrame()
 
@@ -138,7 +144,14 @@ def load_enriched_data(csv_path: Path = DATA_FILE, use_weather_api: bool = False
         bins=[-10, 5, 15, 25, 40],
         labels=["Freezing", "Cool", "Mild", "Warm"],
     )
-    return add_time_signals(df)
+    df = add_time_signals(df)
+    df.attrs["weather_meta"] = {
+        "source": weather_source,
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="minutes"),
+        "coverage_start": df["timestamp"].min().isoformat(),
+        "coverage_end": df["timestamp"].max().isoformat(),
+    }
+    return df
 
 
 def add_time_signals(dataframe: pd.DataFrame) -> pd.DataFrame:

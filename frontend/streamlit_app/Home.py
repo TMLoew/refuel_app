@@ -17,4 +17,4 @@ st.set_page_config(page_title="Refuel Control Center", page_icon="🏠", layout=
 
 render_top_nav("Home.py")
 st.title("Refuel Control Center")
-st.caption("Choose a workspace from the left-hand navigation to explore live telemetry and planning tools.")
+st.caption("Manage your snack avaailability subject to weather and gym attendance forecasts")
