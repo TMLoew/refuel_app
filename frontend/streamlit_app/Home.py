@@ -78,6 +78,8 @@ def autopilot_should_step(step_interval_seconds: float = 1.0) -> bool:
     force = st.session_state.pop("autopilot_force_step", False)
     last_tick = st.session_state.get("autopilot_last_tick")
     now = datetime.now(timezone.utc)
+    if last_tick is not None and last_tick.tzinfo is None:
+        last_tick = last_tick.replace(tzinfo=timezone.utc)
     if force or last_tick is None or (now - last_tick).total_seconds() >= step_interval_seconds:
         st.session_state["autopilot_last_tick"] = now
         return True
