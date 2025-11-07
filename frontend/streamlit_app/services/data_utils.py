@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,7 @@ PREFERRED_DATASETS = [
 ]
 DATA_FILE = next((path for path in PREFERRED_DATASETS if path.exists()), PREFERRED_DATASETS[-1])
 PROCUREMENT_PLAN_FILE = PROJECT_ROOT / "data" / "procurement_plan.csv"
+POS_LOG_FILE = PROJECT_ROOT / "data" / "pos_runtime_log.csv"
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},
@@ -270,13 +271,16 @@ def build_scenario_forecast(
     return future
 
 
-def save_procurement_plan(plan: pd.DataFrame) -> None:
+def save_procurement_plan(plan: pd.DataFrame, metadata: Optional[Dict[str, str]] = None) -> None:
     """Persist the latest procurement plan to disk so other pages can load it."""
     if plan is None or plan.empty:
         return
     procurement_dir = PROCUREMENT_PLAN_FILE.parent
     procurement_dir.mkdir(parents=True, exist_ok=True)
     export = plan.copy()
+    metadata = metadata or {}
+    for key, value in metadata.items():
+        export[key] = value
     if "date" in export.columns:
         export["date"] = pd.to_datetime(export["date"]).dt.strftime("%Y-%m-%d")
     export.to_csv(PROCUREMENT_PLAN_FILE, index=False)
@@ -289,4 +293,22 @@ def load_procurement_plan() -> pd.DataFrame:
     df = pd.read_csv(PROCUREMENT_PLAN_FILE)
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"])
+    return df
+
+
+def append_pos_log(entry: Dict[str, float]) -> None:
+    """Append a single POS entry to the runtime log."""
+    POS_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame([entry])
+    header = not POS_LOG_FILE.exists()
+    df.to_csv(POS_LOG_FILE, mode="a", header=header, index=False)
+
+
+def load_pos_log() -> pd.DataFrame:
+    """Load the POS runtime log."""
+    if not POS_LOG_FILE.exists():
+        return pd.DataFrame(columns=["timestamp", "sales_units", "stock_remaining", "checkins_recorded", "notes"])
+    df = pd.read_csv(POS_LOG_FILE)
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
     return df

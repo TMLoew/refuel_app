@@ -86,6 +86,9 @@ else:
     plan_df["date"] = pd.to_datetime(plan_df["date"])
     today = pd.Timestamp.now().normalize()
     future = plan_df[plan_df["date"] >= today]
+    meta_cols = [col for col in plan_df.columns if col.startswith("plan_")]
+    plan_meta = {col.replace("plan_", ""): plan_df[col].iloc[0] for col in meta_cols} if meta_cols else {}
+    table_df = plan_df.drop(columns=meta_cols, errors="ignore")
     metrics = st.columns(3)
     if "profit" in plan_df.columns:
         metrics[0].metric("Projected profit", f"€{plan_df['profit'].sum():.0f}")
@@ -95,6 +98,14 @@ else:
         metrics[2].metric("Ending stock", f"{plan_df['stock_after'].iloc[-1]:.0f} units")
     if "plan_generated_at" in plan_df.columns:
         st.caption(f"Plan generated at {plan_df['plan_generated_at'].iloc[0]}")
+    if plan_meta:
+        st.markdown(
+            "**Plan assumptions**  \n"
+            f"- Weather: **{plan_meta.get('weather_pattern', 'n/a')}** · Promo: **{plan_meta.get('promo', 'n/a')}**  \n"
+            f"- Pricing Δ: {plan_meta.get('price_change_pct', '0')}% · Strategy Δ: {plan_meta.get('price_strategy_pct', '0')}%  \n"
+            f"- Unit cost: €{plan_meta.get('unit_cost', 'n/a')} · Fee: €{plan_meta.get('fee', 'n/a')}  \n"
+            f"- Horizon: {plan_meta.get('horizon_days', '?')} d · Safety stock: {plan_meta.get('safety_stock', '?')} units",
+        )
     if {"reordered", "reorder_qty"}.issubset(plan_df.columns):
         upcoming = future[future["reordered"] == "Yes"]
         if not upcoming.empty:
@@ -102,10 +113,10 @@ else:
             st.success(f"Next reorder {next_row['date'].strftime('%Y-%m-%d')} · {next_row['reorder_qty']:.0f} units.")
     columns_to_show = (
         ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
-        if {"scenario", "reorder_qty"}.issubset(plan_df.columns)
-        else list(plan_df.columns)
+        if {"scenario", "reorder_qty"}.issubset(table_df.columns)
+        else list(table_df.columns)
     )
-    st.dataframe(plan_df.head(25)[columns_to_show], use_container_width=True, height=300)
+    st.dataframe(table_df.head(25)[columns_to_show], use_container_width=True, height=300)
 
 st.subheader("Export settings")
 export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon)}, indent=2)

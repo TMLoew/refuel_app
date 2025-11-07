@@ -273,7 +273,25 @@ with inventory_tab:
                 else:
                     plan_id = datetime.utcnow().isoformat(timespec="seconds")
                     auto_df["plan_generated_at"] = plan_id
-                    save_procurement_plan(auto_df)
+                    scenario_metadata = {
+                        "plan_weather_pattern": weather_pattern,
+                        "plan_marketing_boost_pct": f"{marketing_boost}",
+                        "plan_promo": promo_choice,
+                        "plan_price_change_pct": f"{price_change}",
+                        "plan_price_strategy_pct": f"{price_strategy}",
+                        "plan_unit_cost": f"{auto_unit_cost:.2f}",
+                        "plan_fee": f"{auto_fee:.2f}",
+                        "plan_horizon_days": f"{auto_days}",
+                        "plan_lead_time_days": f"{lead_time_auto}",
+                        "plan_safety_stock": f"{safety_auto:.1f}",
+                        "plan_reorder_qty": f"{reorder_qty_auto:.1f}",
+                        "plan_temp_manual": f"{temp_manual}",
+                        "plan_precip_manual": f"{precip_manual}",
+                        "plan_event_intensity": f"{event_intensity}",
+                    }
+                    for meta_key, meta_val in scenario_metadata.items():
+                        auto_df[meta_key] = meta_val
+                    save_procurement_plan(auto_df, metadata=scenario_metadata)
                     st.session_state["auto_results"] = auto_df
                     st.success("Procurement plan saved. Dashboard and Settings now reference this run.")
 
