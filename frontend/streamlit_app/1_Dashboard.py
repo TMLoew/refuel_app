@@ -14,6 +14,7 @@ try:
         WEATHER_SCENARIOS,
         build_scenario_forecast,
         load_enriched_data,
+        load_product_mix_data,
         train_models,
     )
 except (ModuleNotFoundError, ImportError) as _abs_exc:
@@ -47,6 +48,7 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             WEATHER_SCENARIOS,
             build_scenario_forecast,
             load_enriched_data,
+            load_product_mix_data,
             train_models,
         )
     except Exception as _retry_abs_exc:
@@ -60,6 +62,7 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
                 WEATHER_SCENARIOS,
                 build_scenario_forecast,
                 load_enriched_data,
+                load_product_mix_data,
                 train_models,
             )
         except Exception as _local_exc:
@@ -272,6 +275,7 @@ def render_dashboard() -> None:
 
     with st.spinner("Loading telemetry and contextual data..."):
         data = load_enriched_data(use_weather_api=use_weather_api)
+        product_mix_df = load_product_mix_data()
     if data.empty:
         st.error("No gym data found yet. Drop a CSV into `data/gym_badges.csv` to get started.")
         return
@@ -331,6 +335,41 @@ def render_dashboard() -> None:
 
     render_summary_cards(data)
     render_history_charts(data)
+
+    if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:
+        st.subheader("Product mix snapshot")
+        latest_mix_date = product_mix_df["date"].max()
+        latest_mix = product_mix_df[product_mix_df["date"] == latest_mix_date].copy()
+        latest_mix["weight_pct"] = latest_mix["weight"] * 100
+        mix_cols = st.columns(3)
+        mix_cols[0].metric("Snapshot date", latest_mix_date.strftime("%Y-%m-%d"))
+        mix_cols[1].metric("Visitors plan", f"{int(latest_mix['visitors'].iloc[0]):,}")
+        mix_cols[2].metric("Suggested units", f"{latest_mix['suggested_qty'].sum():.0f}")
+        mix_fig = px.bar(
+            latest_mix,
+            x="product",
+            y="weight_pct",
+            title="Mix share by product",
+            labels={"weight_pct": "Share (%)", "product": "Product"},
+            color="hot_day",
+            color_discrete_map={0: "#2E86AB", 1: "#E74C3C"},
+        )
+        mix_fig.update_layout(legend_title_text="Hot day?")
+        st.plotly_chart(mix_fig, width="stretch")
+        st.dataframe(
+            latest_mix[["product", "suggested_qty", "weight_pct", "rainy_day"]]
+            .rename(
+                columns={
+                    "product": "Product",
+                    "suggested_qty": "Suggested Qty",
+                    "weight_pct": "Mix Share (%)",
+                    "rainy_day": "Rainy flag",
+                }
+            )
+            .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}"}),
+            width="stretch",
+            height=260,
+        )
 
     forecast_df = build_scenario_forecast(data, models, scenario)
     st.subheader("What-if forecast")

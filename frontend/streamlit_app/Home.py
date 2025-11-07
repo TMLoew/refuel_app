@@ -36,6 +36,7 @@ load_enriched_data = data_utils_mod.load_enriched_data
 train_models = data_utils_mod.train_models
 save_procurement_plan = getattr(data_utils_mod, "save_procurement_plan", lambda *_args, **_kwargs: None)
 load_procurement_plan = getattr(data_utils_mod, "load_procurement_plan", lambda: pd.DataFrame())
+load_product_mix_data = getattr(data_utils_mod, "load_product_mix_data", lambda *_args, **_kwargs: pd.DataFrame())
 
 PAGE_ICON = get_logo_path() or "🏠"
 st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
@@ -201,6 +202,7 @@ if "auto_results" not in st.session_state:
     cached_plan = load_procurement_plan()
     if not cached_plan.empty:
         st.session_state["auto_results"] = cached_plan
+product_mix_df = load_product_mix_data()
 
 total_days = max(1, int((data["timestamp"].max() - data["timestamp"].min()).days) or 1)
 with st.sidebar:
@@ -379,6 +381,56 @@ with pricing_tab:
     profit_fig.add_vline(x=optimal_price, line_dash="dash", line_color="green", annotation_text="Optimal")
     profit_fig.add_vline(x=preferred_price, line_dash="dot", line_color="blue", annotation_text="Test price")
     st.plotly_chart(profit_fig, width="stretch")
+
+    if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:
+        st.subheader("Product mix outlook")
+        mix_dates = sorted(product_mix_df["date"].dt.date.unique())
+        default_mix_date = mix_dates[-1]
+        selected_mix_date = st.select_slider(
+            "Product mix date",
+            options=mix_dates,
+            value=default_mix_date,
+            key="mix-date",
+            help="Choose a day to inspect the recommended assortment and quantities.",
+        )
+        mix_slice = product_mix_df[product_mix_df["date"].dt.date == selected_mix_date].copy()
+        if not mix_slice.empty:
+            mix_slice["weight_pct"] = mix_slice["weight"] * 100
+            info_cols = st.columns(3)
+            info_cols[0].metric("Visitors", f"{int(mix_slice['visitors'].iloc[0]):,}")
+            info_cols[1].metric("Cardio share", f"{mix_slice['cardio_share'].iloc[0]*100:.1f}%")
+            info_cols[2].metric(
+                "Weather",
+                f"{mix_slice['temp_max_c'].iloc[0]:.1f}°C · {mix_slice['precip_mm'].iloc[0]:.1f} mm",
+            )
+            mix_fig = px.bar(
+                mix_slice,
+                x="product",
+                y="weight_pct",
+                color="season",
+                title=f"Recommended product share · {selected_mix_date}",
+                labels={"weight_pct": "Mix share (%)", "product": "", "season": "Season"},
+            )
+            st.plotly_chart(mix_fig, width="stretch")
+            st.dataframe(
+                mix_slice[
+                    ["product", "suggested_qty", "weight_pct", "hot_day", "rainy_day"]
+                ]
+                .rename(
+                    columns={
+                        "product": "Product",
+                        "suggested_qty": "Suggested Qty",
+                        "weight_pct": "Mix Share (%)",
+                        "hot_day": "Hot?",
+                        "rainy_day": "Rainy?",
+                    }
+                )
+                .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}"}),
+                width="stretch",
+                height=260,
+            )
+        else:
+            st.info("No product mix rows for the selected date.")
 
 with inventory_tab:
     sim_mode = st.selectbox("Simulation mode", ["Manual Planner", "Historic Replay", "Weather-aware Autopilot"])

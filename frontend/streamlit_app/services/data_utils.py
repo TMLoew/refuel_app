@@ -29,6 +29,7 @@ PREFERRED_DATASETS = [
 DATA_FILE = next((path for path in PREFERRED_DATASETS if path.exists()), PREFERRED_DATASETS[-1])
 PROCUREMENT_PLAN_FILE = PROJECT_ROOT / "data" / "procurement_plan.csv"
 POS_LOG_FILE = PROJECT_ROOT / "data" / "pos_runtime_log.csv"
+PRODUCT_MIX_FILE = PROJECT_ROOT / "data" / "product_mix_daily.csv"
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},
@@ -293,6 +294,19 @@ def load_procurement_plan() -> pd.DataFrame:
     if not PROCUREMENT_PLAN_FILE.exists():
         return pd.DataFrame()
     df = pd.read_csv(PROCUREMENT_PLAN_FILE)
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+    return df
+
+
+@st.cache_data(show_spinner=False)
+def load_product_mix_data(csv_path: Path = PRODUCT_MIX_FILE) -> pd.DataFrame:
+    """Load product mix recommendations (daily product shares & suggested qty)."""
+    if not csv_path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        return df
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"])
     return df
