@@ -1,12 +1,11 @@
-from pathlib import Path
-from typing import Dict, Tuple
 
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import streamlit as st
+# --- Import bootstrap: make this file work from both local runs and Streamlit Cloud ---
+import sys
+from pathlib import Path
+
+# Try absolute import first, but capture the exception so we can display the real cause if it
+# actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
 try:
-    # Prefer absolute imports when the repo root exposes the `frontend` package
     from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
     from frontend.streamlit_app.services.data_utils import (
         CHECKIN_FEATURES,
@@ -17,33 +16,61 @@ try:
         load_enriched_data,
         train_models,
     )
-except (ModuleNotFoundError, ImportError):
-    # Fallback for Streamlit Cloud / pages execution where the working dir is the repo root
-    # (e.g., /mount/src) and the app lives under /<repo_name>/frontend/streamlit_app/...
-    import sys
-    from pathlib import Path
-
+except (ModuleNotFoundError, ImportError) as _abs_exc:
+    # Prepare sys.path so that both `frontend.streamlit_app...` and local `components/services`
+    # become importable regardless of whether we are in repo root or app subdir.
     _this = Path(__file__).resolve()
-    _pages_dir = _this.parent
-    # If this file is under .../streamlit_app/pages, we want the .../streamlit_app directory
-    _app_root = _pages_dir if (_pages_dir / "services").exists() else _pages_dir.parent
-    # Add both the app root and the repo root to sys.path so `components`/`services` resolve
-    _repo_root = _app_root.parent
 
-    for _p in (str(_pages_dir), str(_app_root), str(_repo_root)):
-        if _p not in sys.path:
-            sys.path.insert(0, _p)
+    # Candidate roots to add to sys.path (most specific first)
+    _candidates = [
+        _this.parent,                       # .../streamlit_app
+        _this.parent.parent,                # .../frontend
+        _this.parent.parent.parent,         # repo root (e.g., .../refuel_app)
+    ]
+    for _p in _candidates:
+        _s = str(_p)
+        if _s not in sys.path:
+            sys.path.insert(0, _s)
 
-    from components.layout import render_top_nav, sidebar_info_block
-    from services.data_utils import (
-        CHECKIN_FEATURES,
-        SNACK_FEATURES,
-        SNACK_PROMOS,
-        WEATHER_SCENARIOS,
-        build_scenario_forecast,
-        load_enriched_data,
-        train_models,
-    )
+    # Also ensure the explicit directories exist for sanity
+    _frontend_dir = _this.parent.parent if (_this.parent.name == 'streamlit_app') else None
+    if _frontend_dir and str(_frontend_dir) not in sys.path:
+        sys.path.insert(0, str(_frontend_dir))
+
+    try:
+        # Retry absolute imports now that paths are primed
+        from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+        from frontend.streamlit_app.services.data_utils import (
+            CHECKIN_FEATURES,
+            SNACK_FEATURES,
+            SNACK_PROMOS,
+            WEATHER_SCENARIOS,
+            build_scenario_forecast,
+            load_enriched_data,
+            train_models,
+        )
+    except Exception as _retry_abs_exc:
+        # Fall back to local package-style imports (components/, services/ under streamlit_app)
+        try:
+            from components.layout import render_top_nav, sidebar_info_block
+            from services.data_utils import (
+                CHECKIN_FEATURES,
+                SNACK_FEATURES,
+                SNACK_PROMOS,
+                WEATHER_SCENARIOS,
+                build_scenario_forecast,
+                load_enriched_data,
+                train_models,
+            )
+        except Exception as _local_exc:
+            # Surface the true root cause to Streamlit UI for fast debugging
+            import streamlit as _st
+            _st.error("Failed to import app modules. See the exceptions below (absolute, retried absolute, local):")
+            _st.exception(_abs_exc)
+            _st.exception(_retry_abs_exc)
+            _st.exception(_local_exc)
+            raise
+# --- End import bootstrap ---
 
 st.set_page_config(
     page_title="Refuel Ops Dashboard",
