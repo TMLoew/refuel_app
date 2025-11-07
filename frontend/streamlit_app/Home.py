@@ -92,6 +92,117 @@ st.info(
     "Use the navigation bar to jump into specific tools. The sidebar controls above mirror the default data slice you can apply inside each module."
 )
 
+
+def run_auto_simulation(
+    forecast_hours: pd.DataFrame,
+    starting_stock: float,
+    safety_stock: float,
+    reorder_qty: float,
+    unit_cost: float,
+    fee: float,
+    elasticity: float,
+    price_strategy_pct: float,
+    scenario_label: str,
+) -> pd.DataFrame:
+    """Simulate multi-day stock + pricing autopilot decisions."""
+    if forecast_hours.empty:
+        return pd.DataFrame()
+
+    forecast = forecast_hours.copy()
+    forecast["timestamp"] = pd.to_datetime(forecast["timestamp"])
+    daily = (
+        forecast.assign(date=forecast["timestamp"].dt.date)
+        .groupby("date")
+        .agg(
+            temperature_c=("temperature_c", "mean"),
+            snack_price=("snack_price", "mean"),
+            demand=("pred_snack_units", "sum"),
+            checkins=("pred_checkins", "sum"),
+        )
+        .reset_index()
+    )
+    if daily.empty:
+        return pd.DataFrame()
+
+    base_price = float(daily["snack_price"].mean())
+    temp_mean = float(daily["temperature_c"].mean())
+    price_min = base_price * 0.8 if base_price else 1.5
+    price_max = base_price * 1.25 if base_price else 5.0
+
+    rows: List[dict] = []
+    stock = starting_stock
+    for _, row in daily.iterrows():
+        temp_bias = 1 + 0.008 * (row["temperature_c"] - temp_mean)
+        target_price = float(
+            np.clip(row["snack_price"] * temp_bias * (1 + price_strategy_pct / 100), price_min, price_max)
+        )
+        demand_adj = max(0.0, row["demand"] * (target_price / max(base_price, 0.01)) ** elasticity)
+        stock_before = stock
+        sold = min(stock_before, demand_adj)
+        stock_after = stock_before - sold
+        profit = (target_price - unit_cost - fee) * sold
+        reordered = ""
+        reorder_qty_used = 0.0
+        if stock_after <= safety_stock:
+            stock_after += reorder_qty
+            reordered = "Yes"
+            reorder_qty_used = reorder_qty
+        rows.append(
+            {
+                "date": pd.to_datetime(row["date"]),
+                "scenario": scenario_label,
+                "checkins_est": round(row["checkins"], 1),
+                "temperature_c": round(row["temperature_c"], 1),
+                "price": round(target_price, 2),
+                "demand_est": round(demand_adj, 1),
+                "sold": round(sold, 1),
+                "profit": round(profit, 2),
+                "stock_before": round(stock_before, 1),
+                "stock_after": round(stock_after, 1),
+                "reordered": reordered,
+                "reorder_qty": reorder_qty_used,
+            }
+        )
+        stock = stock_after
+    return pd.DataFrame(rows)
+
+
+def run_historic_replay(
+    daily_df: pd.DataFrame,
+    start_idx: int,
+    total_days: int,
+    start_stock: float,
+    safety_stock: float,
+    reorder_qty: float,
+    auto_reorder: bool,
+) -> pd.DataFrame:
+    """Replay historic demand sequences to test manual policies."""
+    if daily_df.empty:
+        return pd.DataFrame()
+
+    stock = start_stock
+    rows: List[dict] = []
+    for offset in range(total_days):
+        row = daily_df.iloc[(start_idx + offset) % len(daily_df)]
+        demand = float(row["snack_units"])
+        sold = min(stock, demand)
+        stock -= sold
+        reordered = False
+        if auto_reorder and stock <= safety_stock:
+            stock += reorder_qty
+            reordered = True
+        rows.append(
+            {
+                "date": row["date"].isoformat(),
+                "demand": round(demand, 1),
+                "sold": round(sold, 1),
+                "stock_after": round(stock, 1),
+                "reordered": "Yes" if reordered else "",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 pricing_tab, inventory_tab = st.tabs(["Pricing & Elasticity", "Inventory Planner"])
 
 with pricing_tab:
@@ -349,109 +460,4 @@ st.table(
 )
 
 
-def run_auto_simulation(
-    forecast_hours: pd.DataFrame,
-    starting_stock: float,
-    safety_stock: float,
-    reorder_qty: float,
-    unit_cost: float,
-    fee: float,
-    elasticity: float,
-    price_strategy_pct: float,
-    scenario_label: str,
-) -> pd.DataFrame:
-    if forecast_hours.empty:
-        return pd.DataFrame()
-
-    forecast = forecast_hours.copy()
-    forecast["timestamp"] = pd.to_datetime(forecast["timestamp"])
-    daily = (
-        forecast.assign(date=forecast["timestamp"].dt.date)
-        .groupby("date")
-        .agg(
-            temperature_c=("temperature_c", "mean"),
-            snack_price=("snack_price", "mean"),
-            demand=("pred_snack_units", "sum"),
-            checkins=("pred_checkins", "sum"),
-        )
-        .reset_index()
-    )
-    if daily.empty:
-        return pd.DataFrame()
-
-    base_price = float(daily["snack_price"].mean())
-    temp_mean = float(daily["temperature_c"].mean())
-    price_min = base_price * 0.8 if base_price else 1.5
-    price_max = base_price * 1.25 if base_price else 5.0
-
-    rows: List[dict] = []
-    stock = starting_stock
-    for _, row in daily.iterrows():
-        temp_bias = 1 + 0.008 * (row["temperature_c"] - temp_mean)
-        target_price = float(
-            np.clip(row["snack_price"] * temp_bias * (1 + price_strategy_pct / 100), price_min, price_max)
-        )
-        demand_adj = max(0.0, row["demand"] * (target_price / max(base_price, 0.01)) ** elasticity)
-        stock_before = stock
-        sold = min(stock_before, demand_adj)
-        stock_after = stock_before - sold
-        profit = (target_price - unit_cost - fee) * sold
-        reordered = ""
-        reorder_qty_used = 0.0
-        if stock_after <= safety_stock:
-            stock_after += reorder_qty
-            reordered = "Yes"
-            reorder_qty_used = reorder_qty
-        rows.append(
-            {
-                "date": pd.to_datetime(row["date"]),
-                "scenario": scenario_label,
-                "checkins_est": round(row["checkins"], 1),
-                "temperature_c": round(row["temperature_c"], 1),
-                "price": round(target_price, 2),
-                "demand_est": round(demand_adj, 1),
-                "sold": round(sold, 1),
-                "profit": round(profit, 2),
-                "stock_before": round(stock_before, 1),
-                "stock_after": round(stock_after, 1),
-                "reordered": reordered,
-                "reorder_qty": reorder_qty_used,
-            }
-        )
-        stock = stock_after
-    return pd.DataFrame(rows)
-
-
 render_footer()
-
-
-def run_historic_replay(
-    daily_df: pd.DataFrame,
-    start_idx: int,
-    total_days: int,
-    start_stock: float,
-    safety_stock: float,
-    reorder_qty: float,
-    auto_reorder: bool,
-) -> pd.DataFrame:
-    stock = start_stock
-    rows: List[dict] = []
-    for offset in range(total_days):
-        row = daily_df.iloc[(start_idx + offset) % len(daily_df)]
-        demand = float(row["snack_units"])
-        sold = min(stock, demand)
-        stock -= sold
-        reordered = False
-        if auto_reorder and stock <= safety_stock:
-            stock += reorder_qty
-            reordered = True
-        rows.append(
-            {
-                "date": row["date"].isoformat(),
-                "demand": round(demand, 1),
-                "sold": round(sold, 1),
-                "stock_after": round(stock, 1),
-                "reordered": "Yes" if reordered else "",
-            }
-        )
-    return pd.DataFrame(rows)
