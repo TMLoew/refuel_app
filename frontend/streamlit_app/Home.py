@@ -531,7 +531,7 @@ with inventory_tab:
                 st.session_state["autopilot_running"] = False
                 st.session_state.pop("auto_results", None)
                 st.success("Autopilot state reset. You're back at the starting conditions.")
-                st.experimental_rerun()
+                st.rerun()
 
             should_step = autopilot_should_step()
             if should_step:
@@ -559,7 +559,7 @@ with inventory_tab:
                     st.session_state["autopilot_last_summary"] = summary
                     if st.session_state.get("autopilot_running"):
                         time.sleep(1.0)
-                        st.experimental_rerun()
+                        st.rerun()
 
             autop_history = st.session_state["autopilot_history"]
             autop_status = "Running" if st.session_state["autopilot_running"] else "Paused"
