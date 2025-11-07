@@ -33,12 +33,10 @@ st.set_page_config(page_title="Settings & APIs", page_icon=PAGE_ICON, layout="wi
 render_top_nav("5_Settings_APIs.py")
 st.title("Settings & API Console")
 st.caption("Manage external data hooks, monitor credentials, and run quick health checks.")
+active_env = "Default"
 
 with st.sidebar:
     sidebar_info_block()
-    st.subheader("Profiles")
-    active_env = st.selectbox("Environment", ["Staging", "Production"])
-    st.caption(f"Selected profile: **{active_env}**")
 
 st.subheader("Weather API configuration")
 with st.form("weather-form"):
