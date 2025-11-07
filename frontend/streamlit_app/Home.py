@@ -8,6 +8,7 @@ import plotly.express as px
 
 # Ensure imports work both locally and on Streamlit Cloud
 ROOT_DIR = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = ROOT_DIR
 APP_DIR = Path(__file__).resolve().parent
 for path in (ROOT_DIR, APP_DIR):
     if str(path) not in sys.path:
