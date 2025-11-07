@@ -57,23 +57,55 @@ if base_data.empty:
 
 models = train_models(base_data)
 log_df = load_pos_log()
+latest_stock = None
+if not log_df.empty and "stock_remaining" in log_df.columns:
+    latest_stock = float(
+        log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0]
+    )
+    st.session_state["pos_stock_tip_dismissed"] = True
 
 col_form, col_alert = st.columns([0.6, 0.4])
 
 with col_form:
     st.subheader("Log POS activity")
+    if latest_stock is None and not st.session_state.get("pos_stock_tip_dismissed"):
+        st.info(
+            "Heads-up: please enter the current shelf stock for your first POS entry so we can auto-track it afterwards."
+        )
     with st.form("pos-entry"):
         now = datetime.now()
         entry_date = st.date_input("Date", value=now.date())
         entry_time = st.time_input("Time", value=time(hour=now.hour, minute=now.minute))
         logged_sales = st.number_input("Snacks sold (units)", min_value=0.0, value=0.0, step=1.0)
         logged_checkins = st.number_input("Gym check-ins recorded", min_value=0.0, value=0.0, step=1.0)
-        stock_remaining = st.number_input("Current stock on shelf (units)", min_value=0.0, value=50.0, step=1.0)
+        restock_delta = st.number_input(
+            "Units restocked before this entry",
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            help="If you added stock since the previous entry, capture it here.",
+        )
+        if latest_stock is None:
+            baseline_stock = st.number_input(
+                "Current stock on shelf (units)",
+                min_value=0.0,
+                value=50.0,
+                step=1.0,
+                help="Needed for the very first log entry so we can track stock going forward.",
+            )
+        else:
+            baseline_stock = latest_stock
+            st.caption(
+                f"Baseline stock auto-filled from the last reading ({baseline_stock:.0f} units). "
+                "We will subtract the sales you log below."
+            )
         notes = st.text_input("Notes / special context", "")
         submitted = st.form_submit_button("Log entry", width="stretch")
 
     if submitted:
         timestamp = datetime.combine(entry_date, entry_time)
+        effective_stock_before = baseline_stock + restock_delta
+        stock_remaining = max(0.0, effective_stock_before - logged_sales)
         append_pos_log(
             {
                 "timestamp": timestamp.isoformat(),
@@ -83,8 +115,15 @@ with col_form:
                 "notes": notes,
             }
         )
-        st.success("Entry captured. Low stock & forecast panels updated.")
+        st.success(
+            f"Entry captured. Auto-updated shelf stock to {stock_remaining:.0f} units after sales & restocks."
+        )
         log_df = load_pos_log()
+        if not log_df.empty and "stock_remaining" in log_df.columns:
+            latest_stock = float(
+                log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0]
+            )
+            st.session_state["pos_stock_tip_dismissed"] = True
 
     st.subheader("Recent entries")
     st.dataframe(
@@ -103,7 +142,6 @@ with col_alert:
     )
     avg_daily = float(daily_usage["daily_snacks"].mean()) if not daily_usage.empty else 50.0
     safety_floor = max(10.0, avg_daily * 1.5)
-    latest_stock = log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0] if not log_df.empty else None
     if latest_stock is None:
         st.info("No POS entries yet. Log your first sale above to unlock alerts.")
     else:
