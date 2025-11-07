@@ -341,10 +341,23 @@ def render_dashboard() -> None:
         latest_mix_date = product_mix_df["date"].max()
         latest_mix = product_mix_df[product_mix_df["date"] == latest_mix_date].copy()
         latest_mix["weight_pct"] = latest_mix["weight"] * 100
+        mix_cost = st.slider(
+            "Assumed unit cost (€)",
+            min_value=0.5,
+            max_value=10.0,
+            value=3.5,
+            step=0.1,
+            key="mix-cost-dashboard",
+        )
+        latest_mix["cost_estimate"] = latest_mix["suggested_qty"] * mix_cost
         mix_cols = st.columns(3)
         mix_cols[0].metric("Snapshot date", latest_mix_date.strftime("%Y-%m-%d"))
         mix_cols[1].metric("Visitors plan", f"{int(latest_mix['visitors'].iloc[0]):,}")
-        mix_cols[2].metric("Suggested units", f"{latest_mix['suggested_qty'].sum():.0f}")
+        mix_cols[2].metric(
+            "Suggested units",
+            f"{latest_mix['suggested_qty'].sum():.0f}",
+            f"Est. cost €{latest_mix['cost_estimate'].sum():.0f}",
+        )
         mix_fig = px.bar(
             latest_mix,
             x="product",
@@ -357,16 +370,17 @@ def render_dashboard() -> None:
         mix_fig.update_layout(legend_title_text="Hot day?")
         st.plotly_chart(mix_fig, width="stretch")
         st.dataframe(
-            latest_mix[["product", "suggested_qty", "weight_pct", "rainy_day"]]
+            latest_mix[["product", "suggested_qty", "weight_pct", "cost_estimate", "rainy_day"]]
             .rename(
                 columns={
                     "product": "Product",
                     "suggested_qty": "Suggested Qty",
                     "weight_pct": "Mix Share (%)",
+                    "cost_estimate": "Est. Cost (€)",
                     "rainy_day": "Rainy flag",
                 }
             )
-            .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}"}),
+            .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}", "Est. Cost (€)": "€{:.0f}"}),
             width="stretch",
             height=260,
         )

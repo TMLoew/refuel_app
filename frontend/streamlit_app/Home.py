@@ -396,6 +396,15 @@ with pricing_tab:
         mix_slice = product_mix_df[product_mix_df["date"].dt.date == selected_mix_date].copy()
         if not mix_slice.empty:
             mix_slice["weight_pct"] = mix_slice["weight"] * 100
+            mix_cost = st.slider(
+                "Assumed unit cost (€)",
+                min_value=0.5,
+                max_value=10.0,
+                value=3.5,
+                step=0.1,
+                key="mix-cost-home",
+            )
+            mix_slice["cost_estimate"] = mix_slice["suggested_qty"] * mix_cost
             info_cols = st.columns(3)
             info_cols[0].metric("Visitors", f"{int(mix_slice['visitors'].iloc[0]):,}")
             info_cols[1].metric("Cardio share", f"{mix_slice['cardio_share'].iloc[0]*100:.1f}%")
@@ -414,18 +423,19 @@ with pricing_tab:
             st.plotly_chart(mix_fig, width="stretch")
             st.dataframe(
                 mix_slice[
-                    ["product", "suggested_qty", "weight_pct", "hot_day", "rainy_day"]
+                    ["product", "suggested_qty", "weight_pct", "cost_estimate", "hot_day", "rainy_day"]
                 ]
                 .rename(
                     columns={
                         "product": "Product",
                         "suggested_qty": "Suggested Qty",
                         "weight_pct": "Mix Share (%)",
+                        "cost_estimate": "Est. Cost (€)",
                         "hot_day": "Hot?",
                         "rainy_day": "Rainy?",
                     }
                 )
-                .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}"}),
+                .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}", "Est. Cost (€)": "€{:.0f}"}),
                 width="stretch",
                 height=260,
             )
