@@ -253,7 +253,7 @@ else:
                     forecast[["timestamp", "pred_snack_units", "pred_checkins"]].sort_values("timestamp"),
                     on="timestamp",
                     direction="nearest",
-                    tolerance=pd.Timedelta("2H"),
+                    tolerance=pd.Timedelta("2h"),
                 )
                 merged = merged.dropna(subset=["pred_snack_units"])
                 if not merged.empty:
