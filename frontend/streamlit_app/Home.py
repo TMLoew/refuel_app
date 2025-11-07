@@ -38,7 +38,7 @@ load_procurement_plan = getattr(data_utils_mod, "load_procurement_plan", lambda:
 PAGE_ICON = get_logo_path() or "🏠"
 st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
 
-render_top_nav("Home.py")
+render_top_nav("Home.py", show_logo=False)
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
 
