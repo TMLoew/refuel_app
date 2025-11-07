@@ -635,7 +635,40 @@ with inventory_tab:
             )
 
             if autop_history.empty:
-                st.info("No autopilot history yet. Press Play to generate the first block of days.")
+                auto_df_display = st.session_state.get("auto_results")
+                if isinstance(auto_df_display, pd.DataFrame) and not auto_df_display.empty:
+                    auto_df_display = auto_df_display.copy()
+                    auto_df_display["date"] = pd.to_datetime(auto_df_display["date"])
+                    metrics_cols = st.columns(3)
+                    metrics_cols[0].metric("Simulation days", f"{len(auto_df_display):.0f}")
+                    metrics_cols[1].metric("Plan profit", f"€{auto_df_display['profit'].sum():.0f}")
+                    metrics_cols[2].metric("Ending stock", f"{auto_df_display['stock_after'].iloc[-1]:.0f} units")
+                    auto_fig = px.line(auto_df_display, x="date", y="stock_after", title="Latest plan trajectory")
+                    auto_fig.add_hline(
+                        y=safety_auto,
+                        line_dash="dot",
+                        line_color="orange",
+                        annotation_text="Safety stock",
+                    )
+                    reorder_points = auto_df_display[auto_df_display["reordered"] == "Yes"]
+                    if not reorder_points.empty:
+                        auto_fig.add_scatter(
+                            x=reorder_points["date"],
+                            y=reorder_points["stock_after"],
+                            mode="markers",
+                            marker=dict(color="green", size=10),
+                            name="Reorders",
+                        )
+                    st.plotly_chart(auto_fig, width="stretch")
+                    st.dataframe(
+                        auto_df_display[
+                            ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
+                        ],
+                        width="stretch",
+                        height=320,
+                    )
+                else:
+                    st.info("No autopilot history yet. Press Play to generate the first block of days.")
             else:
                 history_view = autop_history.copy()
                 history_view["date"] = pd.to_datetime(history_view["date"])
