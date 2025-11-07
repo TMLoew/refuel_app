@@ -38,6 +38,37 @@ load_procurement_plan = getattr(data_utils_mod, "load_procurement_plan", lambda:
 PAGE_ICON = get_logo_path() or "🏠"
 st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
 
+AUTOPILOT_STATE_FILE = PROJECT_ROOT / "data" / "autopilot_infinite.csv"
+
+
+def load_autopilot_history_file() -> pd.DataFrame:
+    if not AUTOPILOT_STATE_FILE.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(AUTOPILOT_STATE_FILE)
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+    return df
+
+
+def save_autopilot_history_file(history_df: pd.DataFrame) -> None:
+    AUTOPILOT_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    export = history_df.copy()
+    if not export.empty and "date" in export.columns:
+        export["date"] = pd.to_datetime(export["date"]).dt.strftime("%Y-%m-%d")
+    export.to_csv(AUTOPILOT_STATE_FILE, index=False)
+
+
+def reset_autopilot_history_file() -> None:
+    if AUTOPILOT_STATE_FILE.exists():
+        AUTOPILOT_STATE_FILE.unlink()
+
+
+def autopilot_anchor_timestamp(base_history: pd.DataFrame, autop_history: pd.DataFrame) -> pd.Timestamp:
+    if autop_history is not None and not autop_history.empty and "date" in autop_history.columns:
+        last_day = pd.to_datetime(autop_history["date"].max())
+        return last_day + pd.Timedelta(hours=23)
+    return base_history["timestamp"].max()
+
 render_top_nav("Home.py", show_logo=False)
 st.title("Refuel Control Center")
 st.caption("Manage your snack availability subject to weather and gym attendance forecasts")
@@ -317,7 +348,7 @@ with inventory_tab:
         else:
             derived_conversion = float(data["snack_units"].sum()) / max(float(data["checkins"].sum()), 1.0)
             derived_conversion = float(np.clip(derived_conversion, 0.05, 0.9))
-            auto_days = st.slider("Simulation horizon (days)", 7, 90, 28, key="auto-days")
+            auto_days = st.slider("Autopilot step (simulated days per run)", 3, 120, 21, key="auto-days")
             lead_time_auto = 7
             service_factor = 1.65
             demand_std = float(daily_summary["snack_units"].std() or avg_units * 0.1)
@@ -328,11 +359,11 @@ with inventory_tab:
             starting_auto = reorder_qty_auto * 2
             auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
             auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
-            st.caption("Autopilot blends forecasted weather + gym traffic to price dynamically and emit reorder signals.")
+            st.caption("Autopilot now runs indefinitely: it generates weather, attendance, and snack demand while managing stock.")
 
             scenario_cols = st.columns(3)
             weather_pattern = scenario_cols[0].selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()), key="auto-weather")
-            marketing_boost = scenario_cols[1].slider("Marketing boost (%)", 0, 50, 10, key="auto-marketing")
+            marketing_boost = scenario_cols[1].slider("Marketing boost (%)", 0, 80, 10, key="auto-marketing")
             promo_choice = scenario_cols[2].selectbox("Promo tactic", list(SNACK_PROMOS.keys()), key="auto-promo")
 
             manual_cols = st.columns(3)
@@ -342,94 +373,172 @@ with inventory_tab:
 
             price_change = st.slider("Baseline price change (%)", -20, 25, 0, key="auto-price-change")
             price_strategy = st.slider("Dynamic price aggressiveness (%)", -10, 15, 0, key="auto-price-strategy")
+            sales_boost_pct = st.slider(
+                "Sales boost (%)",
+                min_value=0,
+                max_value=200,
+                value=0,
+                step=5,
+                key="auto-sales-boost",
+                help="Apply an extra uplift to snack demand during the infinite simulation.",
+            )
 
+            if "autopilot_history" not in st.session_state:
+                st.session_state["autopilot_history"] = load_autopilot_history_file()
+            if "autopilot_running" not in st.session_state:
+                st.session_state["autopilot_running"] = False
+
+            autop_history = st.session_state["autopilot_history"]
+            current_stock = starting_auto if autop_history.empty else float(autop_history["stock_after"].iloc[-1])
             cola, colb, colc = st.columns(3)
             cola.metric("Derived conversion", f"{derived_conversion:.2f}")
             colb.metric("Recommended safety stock", f"{safety_auto:.0f} units")
             colc.metric("Recommended reorder qty", f"{reorder_qty_auto:.0f} units")
 
-            if st.button("Run automated simulation", key="auto-run"):
-                scenario_payload = {
-                    "horizon_hours": auto_days * 24,
-                    "weather_pattern": weather_pattern,
-                    "temp_manual": temp_manual,
-                    "precip_manual": precip_manual,
-                    "event_intensity": event_intensity,
-                    "marketing_boost_pct": marketing_boost,
-                    "snack_price_change": price_change,
-                    "snack_promo": promo_choice,
-                }
-                forecast_hours = build_scenario_forecast(data, models, scenario_payload)
-                auto_df = run_auto_simulation(
-                    forecast_hours=forecast_hours,
-                    starting_stock=starting_auto,
-                    safety_stock=safety_auto,
-                    reorder_qty=reorder_qty_auto,
-                    unit_cost=auto_unit_cost,
-                    fee=auto_fee,
-                    elasticity=elasticity,
-                    price_strategy_pct=price_strategy,
-                    scenario_label=weather_pattern,
-                )
-                if auto_df.empty:
-                    st.warning("Simulation failed; need more data.")
-                else:
-                    plan_id = datetime.utcnow().isoformat(timespec="seconds")
-                    auto_df["plan_generated_at"] = plan_id
-                    scenario_metadata = {
-                        "plan_weather_pattern": weather_pattern,
-                        "plan_marketing_boost_pct": f"{marketing_boost}",
-                        "plan_promo": promo_choice,
-                        "plan_price_change_pct": f"{price_change}",
-                        "plan_price_strategy_pct": f"{price_strategy}",
-                        "plan_unit_cost": f"{auto_unit_cost:.2f}",
-                        "plan_fee": f"{auto_fee:.2f}",
-                        "plan_horizon_days": f"{auto_days}",
-                        "plan_lead_time_days": f"{lead_time_auto}",
-                        "plan_safety_stock": f"{safety_auto:.1f}",
-                        "plan_reorder_qty": f"{reorder_qty_auto:.1f}",
-                        "plan_temp_manual": f"{temp_manual}",
-                        "plan_precip_manual": f"{precip_manual}",
-                        "plan_event_intensity": f"{event_intensity}",
-                    }
-                    for meta_key, meta_val in scenario_metadata.items():
-                        auto_df[meta_key] = meta_val
-                    save_procurement_plan(auto_df, metadata=scenario_metadata)
-                    st.session_state["auto_results"] = auto_df
-                    st.success("Procurement plan saved. Dashboard and Settings now reference this run.")
+            status_cols = st.columns(2)
+            status_cols[0].metric("Autopilot status", "Running" if st.session_state["autopilot_running"] else "Paused")
+            status_cols[1].metric("Current stock", f"{current_stock:.0f} units")
 
-            auto_df = st.session_state.get("auto_results")
-            if isinstance(auto_df, pd.DataFrame) and not auto_df.empty:
-                auto_df_display = auto_df.copy()
-                auto_df_display["date"] = pd.to_datetime(auto_df_display["date"])
-                st.metric("Total profit", f"€{auto_df_display['profit'].sum():.0f}")
-                st.metric("Ending stock", f"{auto_df_display['stock_after'].iloc[-1]:.0f} units")
-                upcoming = auto_df_display[auto_df_display["reordered"] == "Yes"]
-                if not upcoming.empty:
-                    next_signal = upcoming.iloc[0]
-                    st.metric(
-                        "Next reorder",
-                        next_signal["date"].strftime("%Y-%m-%d"),
-                        f"{next_signal['reorder_qty']:.0f} units",
-                    )
-                if "plan_generated_at" in auto_df_display.columns:
-                    st.caption(f"Plan generated at {auto_df_display['plan_generated_at'].iloc[0]}")
-                auto_fig = px.line(auto_df_display, x="date", y="stock_after", title="Automated stock trajectory")
-                auto_fig.add_hline(y=safety_auto, line_dash="dot", line_color="orange", annotation_text="Safety stock")
-                auto_fig.add_scatter(
-                    x=auto_df_display.loc[auto_df_display["reordered"] == "Yes", "date"],
-                    y=auto_df_display.loc[auto_df_display["reordered"] == "Yes", "stock_after"],
-                    mode="markers",
-                    marker=dict(color="green", size=10),
-                    name="Reorders",
+            scenario_payload = {
+                "horizon_hours": auto_days * 24,
+                "weather_pattern": weather_pattern,
+                "temp_manual": temp_manual,
+                "precip_manual": precip_manual,
+                "event_intensity": event_intensity,
+                "marketing_boost_pct": marketing_boost,
+                "snack_price_change": price_change,
+                "snack_promo": promo_choice,
+            }
+
+            action_cols = st.columns([0.4, 0.3, 0.3])
+            play_clicked = action_cols[0].button("▶️ Play / Advance", key="auto-play", use_container_width=True)
+            pause_clicked = action_cols[1].button(
+                "⏸ Pause",
+                key="auto-pause",
+                use_container_width=True,
+                disabled=not st.session_state["autopilot_running"],
+            )
+            reset_clicked = action_cols[2].button("♻️ Reset", key="auto-reset", use_container_width=True)
+
+            if play_clicked:
+                st.session_state["autopilot_running"] = True
+                anchor_ts = autopilot_anchor_timestamp(data, autop_history)
+                forecast_hours = build_scenario_forecast(
+                    data,
+                    models,
+                    scenario_payload,
+                    anchor_timestamp=anchor_ts,
                 )
+                if forecast_hours.empty:
+                    st.warning("Forecast pipeline returned no rows. Adjust the scenario and try again.")
+                else:
+                    if sales_boost_pct:
+                        forecast_hours["pred_snack_units"] *= 1 + sales_boost_pct / 100
+                    auto_df = run_auto_simulation(
+                        forecast_hours=forecast_hours,
+                        starting_stock=current_stock,
+                        safety_stock=safety_auto,
+                        reorder_qty=reorder_qty_auto,
+                        unit_cost=auto_unit_cost,
+                        fee=auto_fee,
+                        elasticity=elasticity,
+                        price_strategy_pct=price_strategy,
+                        scenario_label=weather_pattern,
+                    )
+                    if auto_df.empty:
+                        st.warning("Simulation failed; need more historical telemetry.")
+                    else:
+                        block_id = (
+                            1 if "sim_block" not in autop_history.columns or autop_history.empty else int(autop_history["sim_block"].max()) + 1
+                        )
+                        plan_id = datetime.utcnow().isoformat(timespec="seconds")
+                        auto_df["sim_block"] = block_id
+                        auto_df["sales_boost_pct"] = sales_boost_pct
+                        auto_df["plan_generated_at"] = plan_id
+                        scenario_metadata = {
+                            "plan_weather_pattern": weather_pattern,
+                            "plan_marketing_boost_pct": f"{marketing_boost}",
+                            "plan_promo": promo_choice,
+                            "plan_price_change_pct": f"{price_change}",
+                            "plan_price_strategy_pct": f"{price_strategy}",
+                            "plan_unit_cost": f"{auto_unit_cost:.2f}",
+                            "plan_fee": f"{auto_fee:.2f}",
+                            "plan_horizon_days": f"{auto_days}",
+                            "plan_lead_time_days": f"{lead_time_auto}",
+                            "plan_safety_stock": f"{safety_auto:.1f}",
+                            "plan_reorder_qty": f"{reorder_qty_auto:.1f}",
+                            "plan_temp_manual": f"{temp_manual}",
+                            "plan_precip_manual": f"{precip_manual}",
+                            "plan_event_intensity": f"{event_intensity}",
+                            "plan_sales_boost_pct": f"{sales_boost_pct}",
+                            "plan_block_id": f"{block_id}",
+                        }
+                        for meta_key, meta_val in scenario_metadata.items():
+                            auto_df[meta_key] = meta_val
+                        save_procurement_plan(auto_df, metadata=scenario_metadata)
+                        st.session_state["auto_results"] = auto_df
+                        autop_history = pd.concat([autop_history, auto_df], ignore_index=True)
+                        st.session_state["autopilot_history"] = autop_history
+                        save_autopilot_history_file(autop_history)
+                        st.success(
+                            f"Advanced {auto_days} days. Ending stock {auto_df['stock_after'].iloc[-1]:.0f} units · "
+                            f"profit €{auto_df['profit'].sum():.0f}."
+                        )
+
+            if pause_clicked:
+                st.session_state["autopilot_running"] = False
+                st.info("Autopilot paused. Press Play to continue generating future days.")
+
+            if reset_clicked:
+                reset_autopilot_history_file()
+                st.session_state["autopilot_history"] = pd.DataFrame()
+                st.session_state["autopilot_running"] = False
+                st.session_state.pop("auto_results", None)
+                st.success("Autopilot state reset. You're back at the starting conditions.")
+                st.experimental_rerun()
+
+            autop_status = "Running" if st.session_state["autopilot_running"] else "Paused"
+            st.caption(
+                f"Status: **{autop_status}** · data persisted to `{AUTOPILOT_STATE_FILE.name}` "
+                "(share this CSV or reload it later)."
+            )
+
+            if autop_history.empty:
+                st.info("No autopilot history yet. Press Play to generate the first block of days.")
+            else:
+                history_view = autop_history.copy()
+                history_view["date"] = pd.to_datetime(history_view["date"])
+                metrics_cols = st.columns(3)
+                metrics_cols[0].metric("Days simulated", f"{len(history_view):.0f}")
+                metrics_cols[1].metric("Total profit", f"€{history_view['profit'].sum():.0f}")
+                metrics_cols[2].metric("Reorders triggered", int((history_view["reordered"] == "Yes").sum()))
+
+                auto_fig = px.line(history_view, x="date", y="stock_after", title="Autopilot stock trajectory (infinite run)")
+                auto_fig.add_hline(y=safety_auto, line_dash="dot", line_color="orange", annotation_text="Safety stock")
+                reorder_points = history_view[history_view["reordered"] == "Yes"]
+                if not reorder_points.empty:
+                    auto_fig.add_scatter(
+                        x=reorder_points["date"],
+                        y=reorder_points["stock_after"],
+                        mode="markers",
+                        marker=dict(color="green", size=10),
+                        name="Reorders",
+                    )
                 st.plotly_chart(auto_fig, width="stretch")
+
                 st.dataframe(
-                    auto_df_display[
+                    history_view.tail(60)[
                         ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
                     ],
                     width="stretch",
                     height=320,
+                )
+                download_blob = history_view.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "Download autopilot history (CSV)",
+                    download_blob,
+                    file_name="autopilot_infinite_history.csv",
+                    mime="text/csv",
                 )
 
 st.subheader("Day-of-week pricing hints")

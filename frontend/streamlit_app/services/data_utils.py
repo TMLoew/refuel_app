@@ -206,6 +206,7 @@ def build_scenario_forecast(
     history: pd.DataFrame,
     models: Tuple[Pipeline, Pipeline],
     scenario: Dict[str, float],
+    anchor_timestamp: Optional[pd.Timestamp] = None,
 ) -> pd.DataFrame:
     """Create a future dataframe incorporating scenario adjustments."""
     checkin_model, snack_model = models
@@ -213,9 +214,10 @@ def build_scenario_forecast(
         return pd.DataFrame()
 
     horizon = scenario["horizon_hours"]
-    future_index = pd.date_range(
-        history["timestamp"].max() + pd.Timedelta(hours=1), periods=horizon, freq="h"
-    )
+    anchor_ts = history["timestamp"].max()
+    if anchor_timestamp is not None:
+        anchor_ts = pd.to_datetime(anchor_timestamp)
+    future_index = pd.date_range(anchor_ts + pd.Timedelta(hours=1), periods=horizon, freq="h")
     future = pd.DataFrame({"timestamp": future_index})
     future["hour"] = future["timestamp"].dt.hour
     future["weekday"] = future["timestamp"].dt.weekday
