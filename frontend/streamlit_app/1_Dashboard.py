@@ -135,8 +135,8 @@ def render_history_charts(df: pd.DataFrame) -> None:
     weather_fig.update_layout(height=380, legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
     col1, col2 = st.columns(2)
-    col1.plotly_chart(usage_fig, use_container_width=True)
-    col2.plotly_chart(weather_fig, use_container_width=True)
+    col1.plotly_chart(usage_fig, width="stretch")
+    col2.plotly_chart(weather_fig, width="stretch")
 
 
 def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
@@ -212,7 +212,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             )
         ],
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     kpi_cols = st.columns(3)
     kpi_cols[0].metric(
@@ -254,7 +254,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             }
         )
         .set_index("timestamp"),
-        use_container_width=True,
+        width="stretch",
     )
 
 

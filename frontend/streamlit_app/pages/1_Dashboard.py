@@ -17,14 +17,28 @@ from frontend.streamlit_app.components.layout import (
     render_footer,
     get_logo_path,
 )
-from frontend.streamlit_app.services.data_utils import (
-    SNACK_PROMOS,
-    WEATHER_SCENARIOS,
-    build_scenario_forecast,
-    load_enriched_data,
-    load_procurement_plan,
-    train_models,
-)
+try:
+    from frontend.streamlit_app.services.data_utils import (
+        SNACK_PROMOS,
+        WEATHER_SCENARIOS,
+        build_scenario_forecast,
+        load_enriched_data,
+        load_procurement_plan,
+        train_models,
+    )
+except ImportError as import_exc:  # fallback for older deployments missing load_procurement_plan
+    if "load_procurement_plan" not in str(import_exc):
+        raise
+    from frontend.streamlit_app.services.data_utils import (  # type: ignore
+        SNACK_PROMOS,
+        WEATHER_SCENARIOS,
+        build_scenario_forecast,
+        load_enriched_data,
+        train_models,
+    )
+
+    def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
+        return pd.DataFrame()
 
 PAGE_ICON = get_logo_path() or "💪"
 st.set_page_config(
@@ -90,8 +104,8 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
     weather_fig.update_layout(height=380, legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
     col1, col2 = st.columns(2)
-    col1.plotly_chart(usage_fig, use_container_width=True)
-    col2.plotly_chart(weather_fig, use_container_width=True)
+    col1.plotly_chart(usage_fig, width="stretch")
+    col2.plotly_chart(weather_fig, width="stretch")
 
 
 def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
@@ -167,7 +181,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             )
         ],
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     kpi_cols = st.columns(3)
     kpi_cols[0].metric(
@@ -209,7 +223,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             }
         )
         .set_index("timestamp"),
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -331,7 +345,7 @@ def render_inventory_game(df: pd.DataFrame) -> None:
             annotation_text=f"Threshold ({low_threshold:.0f})",
             annotation_position="bottom right",
         )
-        st.plotly_chart(stock_fig, use_container_width=True)
+        st.plotly_chart(stock_fig, width="stretch")
 
 
 def render_procurement_panel() -> None:
@@ -378,7 +392,7 @@ def render_procurement_panel() -> None:
         if {"scenario", "reorder_qty"}.issubset(table_df.columns)
         else list(table_df.columns)
     )
-    st.dataframe(table_df.head(30)[columns_to_show], use_container_width=True, height=320)
+    st.dataframe(table_df.head(30)[columns_to_show], width="stretch", height=320)
 
 
 def render_dashboard() -> None:
@@ -392,7 +406,7 @@ def render_dashboard() -> None:
         sidebar_info_block()
         st.subheader("Scenario controls")
         use_weather_api = st.toggle("Use live weather API", value=False)
-        refresh_weather = st.button("🔄 Refresh weather data", use_container_width=True)
+        refresh_weather = st.button("🔄 Refresh weather data", width="stretch")
 
     cache_buster = datetime.now(timezone.utc).timestamp() if refresh_weather else 0.0
     with st.spinner("Loading telemetry and contextual data..."):

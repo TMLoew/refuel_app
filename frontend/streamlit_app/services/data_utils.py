@@ -110,7 +110,7 @@ def load_enriched_data(
 
     df = df.merge(weather_frame, on="timestamp", how="left")
     weather_cols = ["temperature_c", "precipitation_mm", "humidity_pct"]
-    df[weather_cols] = df[weather_cols].fillna(method="ffill").fillna(method="bfill")
+    df[weather_cols] = df[weather_cols].ffill().bfill()
     df.attrs["weather_source"] = weather_source
 
     df["event_intensity"] = np.where(
@@ -214,7 +214,7 @@ def build_scenario_forecast(
 
     horizon = scenario["horizon_hours"]
     future_index = pd.date_range(
-        history["timestamp"].max() + pd.Timedelta(hours=1), periods=horizon, freq="H"
+        history["timestamp"].max() + pd.Timedelta(hours=1), periods=horizon, freq="h"
     )
     future = pd.DataFrame({"timestamp": future_index})
     future["hour"] = future["timestamp"].dt.hour

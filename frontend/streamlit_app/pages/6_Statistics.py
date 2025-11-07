@@ -63,12 +63,12 @@ corr_fig = px.imshow(
     color_continuous_scale="RdBu",
     title="Pearson correlation matrix",
 )
-st.plotly_chart(corr_fig, use_container_width=True)
+st.plotly_chart(corr_fig, width="stretch")
 
 st.subheader("Pairwise relationships")
 pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
 pair_fig = px.scatter_matrix(window_df, dimensions=pair_cols, color="weather_label", title="Scatter matrix with weather classes")
-st.plotly_chart(pair_fig, use_container_width=True)
+st.plotly_chart(pair_fig, width="stretch")
 
 st.subheader("Weather → attendance → snacks")
 scatter_cols = st.columns(2)
@@ -82,7 +82,7 @@ scatter_cols[0].plotly_chart(
         trendline="ols",
         title="Temperature vs. gym attendance",
     ),
-    use_container_width=True,
+    width="stretch",
 )
 scatter_cols[1].plotly_chart(
     px.scatter(
@@ -94,7 +94,7 @@ scatter_cols[1].plotly_chart(
         trendline="ols",
         title="Precipitation vs. snack demand",
     ),
-    use_container_width=True,
+    width="stretch",
 )
 
 st.subheader("Regression diagnostics")
@@ -114,7 +114,7 @@ coef_table = pd.DataFrame(
         "Snack p": snacks_model.pvalues,
     }
 ).round(3)
-st.dataframe(coef_table, use_container_width=True)
+st.dataframe(coef_table, width="stretch")
 
 st.markdown(
     """
@@ -137,7 +137,7 @@ daily_fig = px.line(
     labels={"value": "Value", "variable": "Series"},
     title="Daily weather & demand trend",
 )
-st.plotly_chart(daily_fig, use_container_width=True)
+st.plotly_chart(daily_fig, width="stretch")
 
 st.info(
     "Use this page to validate demand hypotheses before configuring scenarios and automation on the other tabs."

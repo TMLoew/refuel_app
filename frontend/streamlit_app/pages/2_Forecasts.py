@@ -115,8 +115,8 @@ heatmap_fig = go.Figure(
 heatmap_fig.update_layout(title="Hourly utilization pattern")
 
 col1, col2 = st.columns(2)
-col1.plotly_chart(trend_fig, use_container_width=True)
-col2.plotly_chart(heatmap_fig, use_container_width=True)
+col1.plotly_chart(trend_fig, width="stretch")
+col2.plotly_chart(heatmap_fig, width="stretch")
 
 # --- Correlation matrix --------------------------------------------------------
 corr_fields = ["checkins", "snack_units", "temperature_c", "precipitation_mm", "humidity_pct"]
@@ -128,7 +128,7 @@ corr_fig = px.imshow(
     color_continuous_scale="RdBu",
     title="Correlation matrix: weather vs. demand",
 )
-st.plotly_chart(corr_fig, use_container_width=True)
+st.plotly_chart(corr_fig, width="stretch")
 
 # --- Snack vs visit correlation explorer ---------------------------------------
 if snack_agg_mode == "Daily":
@@ -157,7 +157,7 @@ if not snack_df.empty:
         title="Snacks vs. visits",
         hover_data=["temperature_c"],
     )
-    st.plotly_chart(scatter_fig, use_container_width=True)
+    st.plotly_chart(scatter_fig, width="stretch")
 
 # --- Feature sensitivity --------------------------------------------------------
 checkin_model, snack_model = models
@@ -179,7 +179,7 @@ if checkin_model is not None:
     )
     impact_fig.update_layout(coloraxis_showscale=False)
 
-    st.plotly_chart(impact_fig, use_container_width=True)
+    st.plotly_chart(impact_fig, width="stretch")
 
 # --- Residual diagnostics -------------------------------------------------------
 if checkin_model is not None:
@@ -196,8 +196,8 @@ if checkin_model is not None:
         trendline="ols",
         labels={"residuals_checkins": "Residual (actual - predicted)"},
     )
-    st.plotly_chart(residual_fig, use_container_width=True)
+    st.plotly_chart(residual_fig, width="stretch")
 
 st.subheader("Raw data peek")
-st.dataframe(scenario_history.tail(200).set_index("timestamp"), use_container_width=True, height=360)
+st.dataframe(scenario_history.tail(200).set_index("timestamp"), width="stretch", height=360)
 render_footer()

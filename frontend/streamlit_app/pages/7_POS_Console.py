@@ -70,7 +70,7 @@ with col_form:
         logged_checkins = st.number_input("Gym check-ins recorded", min_value=0.0, value=0.0, step=1.0)
         stock_remaining = st.number_input("Current stock on shelf (units)", min_value=0.0, value=50.0, step=1.0)
         notes = st.text_input("Notes / special context", "")
-        submitted = st.form_submit_button("Log entry", use_container_width=True)
+        submitted = st.form_submit_button("Log entry", width="stretch")
 
     if submitted:
         timestamp = datetime.combine(entry_date, entry_time)
@@ -89,7 +89,7 @@ with col_form:
     st.subheader("Recent entries")
     st.dataframe(
         log_df.sort_values("timestamp", ascending=False).head(10),
-        use_container_width=True,
+        width="stretch",
         height=260,
     )
 
@@ -143,7 +143,7 @@ else:
             title="Snack demand outlook (hourly)",
             labels={"pred_snack_units": "Units", "hour": "Hour"},
         )
-        st.plotly_chart(fc_fig, use_container_width=True)
+        st.plotly_chart(fc_fig, width="stretch")
 
         compare_cols = st.columns(2)
         with compare_cols[0]:
@@ -166,7 +166,7 @@ else:
                         "snack_price": "Price (€)",
                     }
                 ),
-                use_container_width=True,
+                width="stretch",
                 height=260,
             )
         with compare_cols[1]:
@@ -187,7 +187,7 @@ else:
                         barmode="group",
                         title="Logged vs. forecast snacks",
                     )
-                    st.plotly_chart(err_fig, use_container_width=True)
+                    st.plotly_chart(err_fig, width="stretch")
                 else:
                     st.info("Log entries are too far from the forecast horizon to compare.")
             else:

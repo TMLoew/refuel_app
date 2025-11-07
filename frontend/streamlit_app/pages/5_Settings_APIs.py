@@ -16,7 +16,15 @@ from frontend.streamlit_app.components.layout import (
     render_footer,
     get_logo_path,
 )
-from frontend.streamlit_app.services.data_utils import load_enriched_data, load_procurement_plan
+try:
+    from frontend.streamlit_app.services.data_utils import load_enriched_data, load_procurement_plan
+except ImportError as import_exc:
+    if "load_procurement_plan" not in str(import_exc):
+        raise
+    from frontend.streamlit_app.services.data_utils import load_enriched_data  # type: ignore
+
+    def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
+        return pd.DataFrame()
 from frontend.streamlit_app.services.weather_pipeline import DEFAULT_LAT, DEFAULT_LON
 
 PAGE_ICON = get_logo_path() or "⚙️"
@@ -41,7 +49,7 @@ with st.form("weather-form"):
     with col2:
         lon = st.number_input("Longitude", value=DEFAULT_LON, step=0.1, format="%.4f")
         cache_hours = st.slider("Cache horizon (hours)", 1, 24, 6)
-    submitted = st.form_submit_button("Save weather profile", use_container_width=True)
+    submitted = st.form_submit_button("Save weather profile", width="stretch")
     if submitted:
         st.success(
             f"Saved weather coordinates ({lat:.4f}, {lon:.4f}) with timeout={api_timeout}s and cache={cache_hours}h."
@@ -116,7 +124,7 @@ else:
         if {"scenario", "reorder_qty"}.issubset(table_df.columns)
         else list(table_df.columns)
     )
-    st.dataframe(table_df.head(25)[columns_to_show], use_container_width=True, height=300)
+    st.dataframe(table_df.head(25)[columns_to_show], width="stretch", height=300)
 
 st.subheader("Export settings")
 export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon)}, indent=2)

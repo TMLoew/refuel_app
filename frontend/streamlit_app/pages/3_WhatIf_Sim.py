@@ -173,7 +173,7 @@ for col in ["checkins", "snack_units", "snack_revenue"]:
         )
     )
 comp_fig.update_layout(barmode="group", title="Aggregate forecast comparison")
-st.plotly_chart(comp_fig, use_container_width=True)
+st.plotly_chart(comp_fig, width="stretch")
 
 st.subheader("Hourly trajectory")
 combined = pd.concat(
@@ -206,7 +206,7 @@ line_fig.update_layout(
     yaxis2=dict(title="Snack units", overlaying="y", side="right"),
     title="Projected hourly demand profiles",
 )
-st.plotly_chart(line_fig, use_container_width=True)
+st.plotly_chart(line_fig, width="stretch")
 
 st.subheader("Scenario inputs recap")
 st.write("Scenario A", scenario_a)
