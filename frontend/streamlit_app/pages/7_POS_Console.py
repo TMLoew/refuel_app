@@ -1,6 +1,6 @@
 from pathlib import Path
 import sys
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
@@ -59,8 +59,8 @@ models = train_models(base_data)
 log_df = load_pos_log()
 latest_stock = None
 if not log_df.empty and "stock_remaining" in log_df.columns:
-    latest_stock = float(
-        log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0]
+    latest_stock = int(
+        round(log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0])
     )
     st.session_state["pos_stock_tip_dismissed"] = True
 
@@ -72,25 +72,25 @@ with col_form:
         st.info(
             "Heads-up: please enter the current shelf stock for your first POS entry so we can auto-track it afterwards."
         )
-    with st.form("pos-entry"):
+with st.form("pos-entry"):
         now = datetime.now()
         entry_date = st.date_input("Date", value=now.date())
         entry_time = st.time_input("Time", value=time(hour=now.hour, minute=now.minute))
-        logged_sales = st.number_input("Snacks sold (units)", min_value=0.0, value=0.0, step=1.0)
-        logged_checkins = st.number_input("Gym check-ins recorded", min_value=0.0, value=0.0, step=1.0)
+        logged_sales = st.number_input("Snacks sold (units)", min_value=0, value=0, step=1)
+        logged_checkins = st.number_input("Gym check-ins recorded", min_value=0, value=0, step=1)
         restock_delta = st.number_input(
             "Units restocked before this entry",
-            min_value=0.0,
-            value=0.0,
-            step=1.0,
+            min_value=0,
+            value=0,
+            step=1,
             help="If you added stock since the previous entry, capture it here.",
         )
         if latest_stock is None:
             baseline_stock = st.number_input(
                 "Current stock on shelf (units)",
-                min_value=0.0,
-                value=50.0,
-                step=1.0,
+                min_value=0,
+                value=50,
+                step=1,
                 help="Needed for the very first log entry so we can track stock going forward.",
             )
         else:
@@ -105,12 +105,12 @@ with col_form:
     if submitted:
         timestamp = datetime.combine(entry_date, entry_time)
         effective_stock_before = baseline_stock + restock_delta
-        stock_remaining = max(0.0, effective_stock_before - logged_sales)
+        stock_remaining = int(max(0, effective_stock_before - logged_sales))
         append_pos_log(
             {
                 "timestamp": timestamp.isoformat(),
-                "sales_units": logged_sales,
-                "checkins_recorded": logged_checkins,
+                "sales_units": int(logged_sales),
+                "checkins_recorded": int(logged_checkins),
                 "stock_remaining": stock_remaining,
                 "notes": notes,
             }
@@ -120,20 +120,59 @@ with col_form:
         )
         log_df = load_pos_log()
         if not log_df.empty and "stock_remaining" in log_df.columns:
-            latest_stock = float(
-                log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0]
+            latest_stock = int(
+                round(log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0])
             )
             st.session_state["pos_stock_tip_dismissed"] = True
 
     st.subheader("Recent entries")
-    st.dataframe(
-        log_df.sort_values("timestamp", ascending=False).head(10),
-        width="stretch",
-        height=260,
-    )
+    recent_entries = log_df.sort_values("timestamp", ascending=False).head(10).copy()
+    for col in ("sales_units", "checkins_recorded", "stock_remaining"):
+        if col in recent_entries.columns:
+            recent_entries[col] = recent_entries[col].round().astype("Int64")
+    st.dataframe(recent_entries, width="stretch", height=260)
 
 with col_alert:
     st.subheader("Live stock posture")
+    shared_reorder_default = st.session_state.get("inventory_reorder_days", 3)
+    reorder_days = st.slider(
+        "Restock coverage (days)",
+        min_value=1,
+        max_value=21,
+        value=shared_reorder_default,
+        key="inventory_reorder_days",
+        help="Shared with the dashboard + home planners so all tools use the same buffer.",
+    )
+    restock_lot = st.number_input(
+        "Restock lot size (units)",
+        min_value=5,
+        value=50,
+        step=5,
+        key="pos-restock-amount",
+    )
+    next_restock_date = (datetime.now() + timedelta(days=reorder_days)).date()
+    st.metric("Next planned restock", next_restock_date.strftime("%Y-%m-%d"), f"every {reorder_days} d")
+    if st.button("Call restock now", key="pos-restock-btn"):
+        if latest_stock is None:
+            st.warning("Log an initial stock reading before triggering a restock.")
+        else:
+            new_stock = latest_stock + restock_lot
+            append_pos_log(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "sales_units": 0,
+                    "checkins_recorded": 0,
+                    "stock_remaining": int(new_stock),
+                    "notes": f"Manual restock +{restock_lot} units (coverage {reorder_days}d)",
+                }
+            )
+            st.success(f"Restock captured. Shelf stock now {int(new_stock)} units.")
+            log_df = load_pos_log()
+            latest_stock = int(
+                round(log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0])
+            )
+            st.session_state["pos_stock_tip_dismissed"] = True
+
     daily_usage = (
         base_data.set_index("timestamp")["snack_units"]
         .resample("D")
