@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 from typing import List
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -21,10 +22,26 @@ try:
         get_logo_bytes,
         render_footer,
     )
-    from frontend.streamlit_app.services.data_utils import load_enriched_data
+    from frontend.streamlit_app.services.data_utils import (
+        WEATHER_SCENARIOS,
+        SNACK_PROMOS,
+        build_scenario_forecast,
+        load_enriched_data,
+        load_procurement_plan,
+        save_procurement_plan,
+        train_models,
+    )
 except ModuleNotFoundError:
     from components.layout import render_top_nav, get_logo_path, get_logo_bytes, render_footer
-    from services.data_utils import load_enriched_data
+    from services.data_utils import (
+        WEATHER_SCENARIOS,
+        SNACK_PROMOS,
+        build_scenario_forecast,
+        load_enriched_data,
+        load_procurement_plan,
+        save_procurement_plan,
+        train_models,
+    )
 
 PAGE_ICON = get_logo_path() or "🏠"
 st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
@@ -57,6 +74,11 @@ daily_summary = (
     .reset_index()
 )
 daily_summary["date"] = daily_summary["timestamp"].dt.date
+models = train_models(data)
+if "auto_results" not in st.session_state:
+    cached_plan = load_procurement_plan()
+    if not cached_plan.empty:
+        st.session_state["auto_results"] = cached_plan
 
 total_days = max(1, int((data["timestamp"].max() - data["timestamp"].min()).days) or 1)
 with st.sidebar:
@@ -187,56 +209,107 @@ with inventory_tab:
 
     else:
         st.subheader("Weather-aware autopilot")
-        derived_conversion = float(data["snack_units"].sum()) / max(float(data["checkins"].sum()), 1.0)
-        derived_conversion = float(np.clip(derived_conversion, 0.05, 0.9))
-        auto_days = st.slider("Simulation horizon (days)", 7, 90, 28, key="auto-days")
-        lead_time_auto = 7
-        service_factor = 1.65
-        demand_std = float(daily_summary["snack_units"].std() or avg_units * 0.1)
-        mean_checkins = float(daily_summary["checkins"].mean())
-        lead_time_demand = derived_conversion * mean_checkins * lead_time_auto
-        safety_auto = max(0.0, lead_time_demand + service_factor * demand_std * np.sqrt(lead_time_auto))
-        reorder_qty_auto = safety_auto + lead_time_demand
-        starting_auto = reorder_qty_auto * 2
-        auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
-        auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
-        st.caption("Autopilot adjusts pricing using weather, elasticity, and gym traffic to maximize profit.")
-        cola, colb, colc = st.columns(3)
-        cola.metric("Derived conversion", f"{derived_conversion:.2f}")
-        colb.metric("Recommended safety stock", f"{safety_auto:.0f} units")
-        colc.metric("Recommended reorder qty", f"{reorder_qty_auto:.0f} units")
-        if st.button("Run automated simulation", key="auto-run"):
-            auto_df = run_auto_simulation(
-                daily_summary,
-                horizon_days=auto_days,
-                starting_stock=starting_auto,
-                safety_stock=safety_auto,
-                reorder_qty=reorder_qty_auto,
-                unit_cost=auto_unit_cost,
-                fee=auto_fee,
-                base_price=avg_price,
-                elasticity=elasticity,
-                conversion_rate=derived_conversion,
-            )
-            if auto_df.empty:
-                st.warning("Simulation failed; need more data.")
-            else:
-                st.session_state["auto_results"] = auto_df
-        auto_df = st.session_state.get("auto_results")
-        if isinstance(auto_df, pd.DataFrame) and not auto_df.empty:
-            st.metric("Total profit", f"€{auto_df['profit'].sum():.0f}")
-            st.metric("Ending stock", f"{auto_df['stock_after'].iloc[-1]:.0f} units")
-            auto_fig = px.line(auto_df, x="date", y="stock_after", title="Automated stock trajectory")
-            auto_fig.add_hline(y=safety_auto, line_dash="dot", line_color="orange", annotation_text="Safety stock")
-            auto_fig.add_scatter(
-                x=auto_df.loc[auto_df["reordered"] == "Yes", "date"],
-                y=auto_df.loc[auto_df["reordered"] == "Yes", "stock_after"],
-                mode="markers",
-                marker=dict(color="green", size=10),
-                name="Reorders",
-            )
-            st.plotly_chart(auto_fig, use_container_width=True)
-            st.dataframe(auto_df, use_container_width=True, height=300)
+        if models[0] is None or models[1] is None:
+            st.warning("Need more telemetry to train the forecast models. Revisit after uploading additional data.")
+        else:
+            derived_conversion = float(data["snack_units"].sum()) / max(float(data["checkins"].sum()), 1.0)
+            derived_conversion = float(np.clip(derived_conversion, 0.05, 0.9))
+            auto_days = st.slider("Simulation horizon (days)", 7, 90, 28, key="auto-days")
+            lead_time_auto = 7
+            service_factor = 1.65
+            demand_std = float(daily_summary["snack_units"].std() or avg_units * 0.1)
+            mean_checkins = float(daily_summary["checkins"].mean())
+            lead_time_demand = derived_conversion * mean_checkins * lead_time_auto
+            safety_auto = max(0.0, lead_time_demand + service_factor * demand_std * np.sqrt(lead_time_auto))
+            reorder_qty_auto = safety_auto + lead_time_demand
+            starting_auto = reorder_qty_auto * 2
+            auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
+            auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
+            st.caption("Autopilot blends forecasted weather + gym traffic to price dynamically and emit reorder signals.")
+
+            scenario_cols = st.columns(3)
+            weather_pattern = scenario_cols[0].selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()), key="auto-weather")
+            marketing_boost = scenario_cols[1].slider("Marketing boost (%)", 0, 50, 10, key="auto-marketing")
+            promo_choice = scenario_cols[2].selectbox("Promo tactic", list(SNACK_PROMOS.keys()), key="auto-promo")
+
+            manual_cols = st.columns(3)
+            temp_manual = manual_cols[0].slider("Manual temp shift (°C)", -8, 8, 0, key="auto-temp")
+            precip_manual = manual_cols[1].slider("Manual precipitation shift (mm)", -3.0, 3.0, 0.0, step=0.1, key="auto-precip")
+            event_intensity = manual_cols[2].slider("Event intensity", 0.2, 2.5, 1.0, step=0.1, key="auto-event")
+
+            price_change = st.slider("Baseline price change (%)", -20, 25, 0, key="auto-price-change")
+            price_strategy = st.slider("Dynamic price aggressiveness (%)", -10, 15, 0, key="auto-price-strategy")
+
+            cola, colb, colc = st.columns(3)
+            cola.metric("Derived conversion", f"{derived_conversion:.2f}")
+            colb.metric("Recommended safety stock", f"{safety_auto:.0f} units")
+            colc.metric("Recommended reorder qty", f"{reorder_qty_auto:.0f} units")
+
+            if st.button("Run automated simulation", key="auto-run"):
+                scenario_payload = {
+                    "horizon_hours": auto_days * 24,
+                    "weather_pattern": weather_pattern,
+                    "temp_manual": temp_manual,
+                    "precip_manual": precip_manual,
+                    "event_intensity": event_intensity,
+                    "marketing_boost_pct": marketing_boost,
+                    "snack_price_change": price_change,
+                    "snack_promo": promo_choice,
+                }
+                forecast_hours = build_scenario_forecast(data, models, scenario_payload)
+                auto_df = run_auto_simulation(
+                    forecast_hours=forecast_hours,
+                    starting_stock=starting_auto,
+                    safety_stock=safety_auto,
+                    reorder_qty=reorder_qty_auto,
+                    unit_cost=auto_unit_cost,
+                    fee=auto_fee,
+                    elasticity=elasticity,
+                    price_strategy_pct=price_strategy,
+                    scenario_label=weather_pattern,
+                )
+                if auto_df.empty:
+                    st.warning("Simulation failed; need more data.")
+                else:
+                    plan_id = datetime.utcnow().isoformat(timespec="seconds")
+                    auto_df["plan_generated_at"] = plan_id
+                    save_procurement_plan(auto_df)
+                    st.session_state["auto_results"] = auto_df
+                    st.success("Procurement plan saved. Dashboard and Settings now reference this run.")
+
+            auto_df = st.session_state.get("auto_results")
+            if isinstance(auto_df, pd.DataFrame) and not auto_df.empty:
+                auto_df_display = auto_df.copy()
+                auto_df_display["date"] = pd.to_datetime(auto_df_display["date"])
+                st.metric("Total profit", f"€{auto_df_display['profit'].sum():.0f}")
+                st.metric("Ending stock", f"{auto_df_display['stock_after'].iloc[-1]:.0f} units")
+                upcoming = auto_df_display[auto_df_display["reordered"] == "Yes"]
+                if not upcoming.empty:
+                    next_signal = upcoming.iloc[0]
+                    st.metric(
+                        "Next reorder",
+                        next_signal["date"].strftime("%Y-%m-%d"),
+                        f"{next_signal['reorder_qty']:.0f} units",
+                    )
+                if "plan_generated_at" in auto_df_display.columns:
+                    st.caption(f"Plan generated at {auto_df_display['plan_generated_at'].iloc[0]}")
+                auto_fig = px.line(auto_df_display, x="date", y="stock_after", title="Automated stock trajectory")
+                auto_fig.add_hline(y=safety_auto, line_dash="dot", line_color="orange", annotation_text="Safety stock")
+                auto_fig.add_scatter(
+                    x=auto_df_display.loc[auto_df_display["reordered"] == "Yes", "date"],
+                    y=auto_df_display.loc[auto_df_display["reordered"] == "Yes", "stock_after"],
+                    mode="markers",
+                    marker=dict(color="green", size=10),
+                    name="Reorders",
+                )
+                st.plotly_chart(auto_fig, use_container_width=True)
+                st.dataframe(
+                    auto_df_display[
+                        ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
+                    ],
+                    use_container_width=True,
+                    height=320,
+                )
 
 st.subheader("Day-of-week pricing hints")
 dow_stats = (
@@ -267,48 +340,75 @@ st.table(
 
 
 def run_auto_simulation(
-    daily_df: pd.DataFrame,
-    horizon_days: int,
+    forecast_hours: pd.DataFrame,
     starting_stock: float,
     safety_stock: float,
     reorder_qty: float,
     unit_cost: float,
     fee: float,
-    base_price: float,
     elasticity: float,
-    conversion_rate: float,
+    price_strategy_pct: float,
+    scenario_label: str,
 ) -> pd.DataFrame:
-    if daily_df.empty:
+    if forecast_hours.empty:
         return pd.DataFrame()
-    avg_temp = daily_df["temperature_c"].mean()
-    price_min = base_price * 0.8
-    price_max = base_price * 1.2
+
+    forecast = forecast_hours.copy()
+    forecast["timestamp"] = pd.to_datetime(forecast["timestamp"])
+    daily = (
+        forecast.assign(date=forecast["timestamp"].dt.date)
+        .groupby("date")
+        .agg(
+            temperature_c=("temperature_c", "mean"),
+            snack_price=("snack_price", "mean"),
+            demand=("pred_snack_units", "sum"),
+            checkins=("pred_checkins", "sum"),
+        )
+        .reset_index()
+    )
+    if daily.empty:
+        return pd.DataFrame()
+
+    base_price = float(daily["snack_price"].mean())
+    temp_mean = float(daily["temperature_c"].mean())
+    price_min = base_price * 0.8 if base_price else 1.5
+    price_max = base_price * 1.25 if base_price else 5.0
+
     rows: List[dict] = []
     stock = starting_stock
-    for offset in range(horizon_days):
-        row = daily_df.iloc[offset % len(daily_df)]
-        temp_adj = 1 + 0.01 * (row["temperature_c"] - avg_temp)
-        price = float(np.clip(base_price * temp_adj, price_min, price_max))
-        demand_base = row["checkins"] * conversion_rate
-        demand = max(0.0, demand_base * (price / base_price) ** elasticity)
-        sold = min(stock, demand)
-        stock -= sold
-        profit = (price - unit_cost - fee) * sold
+    for _, row in daily.iterrows():
+        temp_bias = 1 + 0.008 * (row["temperature_c"] - temp_mean)
+        target_price = float(
+            np.clip(row["snack_price"] * temp_bias * (1 + price_strategy_pct / 100), price_min, price_max)
+        )
+        demand_adj = max(0.0, row["demand"] * (target_price / max(base_price, 0.01)) ** elasticity)
+        stock_before = stock
+        sold = min(stock_before, demand_adj)
+        stock_after = stock_before - sold
+        profit = (target_price - unit_cost - fee) * sold
         reordered = ""
-        if stock <= safety_stock:
-            stock += reorder_qty
+        reorder_qty_used = 0.0
+        if stock_after <= safety_stock:
+            stock_after += reorder_qty
             reordered = "Yes"
+            reorder_qty_used = reorder_qty
         rows.append(
             {
-                "date": row["date"].isoformat(),
-                "price": round(price, 2),
-                "demand_est": round(demand, 1),
+                "date": pd.to_datetime(row["date"]),
+                "scenario": scenario_label,
+                "checkins_est": round(row["checkins"], 1),
+                "temperature_c": round(row["temperature_c"], 1),
+                "price": round(target_price, 2),
+                "demand_est": round(demand_adj, 1),
                 "sold": round(sold, 1),
                 "profit": round(profit, 2),
-                "stock_after": round(stock, 1),
+                "stock_before": round(stock_before, 1),
+                "stock_after": round(stock_after, 1),
                 "reordered": reordered,
+                "reorder_qty": reorder_qty_used,
             }
         )
+        stock = stock_after
     return pd.DataFrame(rows)
 
 

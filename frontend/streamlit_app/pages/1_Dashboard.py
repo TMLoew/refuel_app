@@ -22,6 +22,7 @@ from frontend.streamlit_app.services.data_utils import (
     WEATHER_SCENARIOS,
     build_scenario_forecast,
     load_enriched_data,
+    load_procurement_plan,
     train_models,
 )
 
@@ -333,6 +334,42 @@ def render_inventory_game(df: pd.DataFrame) -> None:
         st.plotly_chart(stock_fig, use_container_width=True)
 
 
+def render_procurement_panel() -> None:
+    st.subheader("Procurement autopilot plan")
+    plan_df = load_procurement_plan()
+    if plan_df.empty:
+        st.info("No procurement plan generated yet. Run the autopilot simulation on Home to populate this view.")
+        return
+
+    plan_df = plan_df.copy()
+    plan_df["date"] = pd.to_datetime(plan_df["date"])
+    today = pd.Timestamp.now().normalize()
+    future = plan_df[plan_df["date"] >= today]
+
+    col_a, col_b = st.columns(2)
+    if "profit" in plan_df.columns:
+        col_a.metric("Plan profit outlook", f"€{plan_df['profit'].sum():.0f}")
+    if "stock_after" in plan_df.columns:
+        col_b.metric("Ending stock", f"{plan_df['stock_after'].iloc[-1]:.0f} units")
+
+    if "plan_generated_at" in plan_df.columns:
+        st.caption(f"Plan generated at {plan_df['plan_generated_at'].iloc[0]}")
+
+    if {"reordered", "reorder_qty"}.issubset(plan_df.columns):
+        upcoming = future[future["reordered"] == "Yes"]
+        if not upcoming.empty:
+            next_row = upcoming.iloc[0]
+            st.success(
+                f"Next reorder on **{next_row['date'].strftime('%Y-%m-%d')}** · {next_row['reorder_qty']:.0f} units."
+            )
+    columns_to_show = (
+        ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
+        if {"scenario", "reorder_qty"}.issubset(plan_df.columns)
+        else list(plan_df.columns)
+    )
+    st.dataframe(plan_df.head(30)[columns_to_show], use_container_width=True, height=320)
+
+
 def render_dashboard() -> None:
     render_top_nav("1_Dashboard.py", show_logo=False)
     st.title("Refuel Performance Cockpit")
@@ -427,6 +464,7 @@ def render_dashboard() -> None:
     st.subheader("What-if forecast")
     render_forecast_section(data, forecast_df)
     render_inventory_game(data)
+    render_procurement_panel()
     render_footer()
 
 

@@ -27,6 +27,7 @@ PREFERRED_DATASETS = [
     PROJECT_ROOT / "data" / "gym_badges.csv",
 ]
 DATA_FILE = next((path for path in PREFERRED_DATASETS if path.exists()), PREFERRED_DATASETS[-1])
+PROCUREMENT_PLAN_FILE = PROJECT_ROOT / "data" / "procurement_plan.csv"
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},
@@ -267,3 +268,25 @@ def build_scenario_forecast(
     )
     future["pred_snack_revenue"] = future["pred_snack_units"] * future["snack_price"]
     return future
+
+
+def save_procurement_plan(plan: pd.DataFrame) -> None:
+    """Persist the latest procurement plan to disk so other pages can load it."""
+    if plan is None or plan.empty:
+        return
+    procurement_dir = PROCUREMENT_PLAN_FILE.parent
+    procurement_dir.mkdir(parents=True, exist_ok=True)
+    export = plan.copy()
+    if "date" in export.columns:
+        export["date"] = pd.to_datetime(export["date"]).dt.strftime("%Y-%m-%d")
+    export.to_csv(PROCUREMENT_PLAN_FILE, index=False)
+
+
+def load_procurement_plan() -> pd.DataFrame:
+    """Load the persisted procurement plan if one exists."""
+    if not PROCUREMENT_PLAN_FILE.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(PROCUREMENT_PLAN_FILE)
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+    return df

@@ -7,6 +7,7 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
+import pandas as pd
 import streamlit as st
 
 from frontend.streamlit_app.components.layout import (
@@ -15,7 +16,7 @@ from frontend.streamlit_app.components.layout import (
     render_footer,
     get_logo_path,
 )
-from frontend.streamlit_app.services.data_utils import load_enriched_data
+from frontend.streamlit_app.services.data_utils import load_enriched_data, load_procurement_plan
 from frontend.streamlit_app.services.weather_pipeline import DEFAULT_LAT, DEFAULT_LON
 
 PAGE_ICON = get_logo_path() or "⚙️"
@@ -75,6 +76,36 @@ webhooks = [
     {"name": "Marketing automation", "status": "paused", "last_event": "3 days ago"},
 ]
 st.table(webhooks)
+
+st.subheader("Procurement plan snapshot")
+plan_df = load_procurement_plan()
+if plan_df.empty:
+    st.info("No procurement plan saved yet. Run the autopilot simulation on the Home tab to publish one.")
+else:
+    plan_df = plan_df.copy()
+    plan_df["date"] = pd.to_datetime(plan_df["date"])
+    today = pd.Timestamp.now().normalize()
+    future = plan_df[plan_df["date"] >= today]
+    metrics = st.columns(3)
+    if "profit" in plan_df.columns:
+        metrics[0].metric("Projected profit", f"€{plan_df['profit'].sum():.0f}")
+    if "reordered" in plan_df.columns:
+        metrics[1].metric("Reorders planned", int((plan_df["reordered"] == "Yes").sum()))
+    if "stock_after" in plan_df.columns:
+        metrics[2].metric("Ending stock", f"{plan_df['stock_after'].iloc[-1]:.0f} units")
+    if "plan_generated_at" in plan_df.columns:
+        st.caption(f"Plan generated at {plan_df['plan_generated_at'].iloc[0]}")
+    if {"reordered", "reorder_qty"}.issubset(plan_df.columns):
+        upcoming = future[future["reordered"] == "Yes"]
+        if not upcoming.empty:
+            next_row = upcoming.iloc[0]
+            st.success(f"Next reorder {next_row['date'].strftime('%Y-%m-%d')} · {next_row['reorder_qty']:.0f} units.")
+    columns_to_show = (
+        ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
+        if {"scenario", "reorder_qty"}.issubset(plan_df.columns)
+        else list(plan_df.columns)
+    )
+    st.dataframe(plan_df.head(25)[columns_to_show], use_container_width=True, height=300)
 
 st.subheader("Export settings")
 export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon)}, indent=2)
