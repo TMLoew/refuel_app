@@ -370,6 +370,8 @@ def render_dashboard() -> None:
             width="stretch",
             height=260,
         )
+    else:
+        st.info("No product mix data detected. Upload `data/product_mix_daily.csv` to populate this snapshot.")
 
     forecast_df = build_scenario_forecast(data, models, scenario)
     st.subheader("What-if forecast")

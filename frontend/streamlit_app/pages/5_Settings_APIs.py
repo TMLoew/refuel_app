@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
@@ -70,7 +70,7 @@ with st.expander("Current tokens (redacted)", expanded=False):
         "open_meteo": "sk-***meteo",
         "gym_webhook": "whsec-***123",
         "pos_service": "pat-***refuel",
-        "last_rotation": datetime.utcnow().isoformat(),
+        "last_rotation": datetime.now(timezone.utc).isoformat(),
     }
     st.json(token_store)
     st.info("Manage actual secrets via your deployment platform; this panel is a placeholder for ops runbooks.")

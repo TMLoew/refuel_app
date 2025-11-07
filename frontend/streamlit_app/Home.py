@@ -431,6 +431,8 @@ with pricing_tab:
             )
         else:
             st.info("No product mix rows for the selected date.")
+    else:
+        st.info("Product mix file not found yet. Drop `data/product_mix_daily.csv` to unlock mix insights.")
 
 with inventory_tab:
     sim_mode = st.selectbox("Simulation mode", ["Manual Planner", "Historic Replay", "Weather-aware Autopilot"])
