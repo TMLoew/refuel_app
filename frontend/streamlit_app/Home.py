@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys
 from typing import List, Dict, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -77,7 +77,7 @@ def autopilot_should_step(step_interval_seconds: float = 1.0) -> bool:
         return False
     force = st.session_state.pop("autopilot_force_step", False)
     last_tick = st.session_state.get("autopilot_last_tick")
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if force or last_tick is None or (now - last_tick).total_seconds() >= step_interval_seconds:
         st.session_state["autopilot_last_tick"] = now
         return True
@@ -131,7 +131,7 @@ def advance_autopilot_block(
     block_id = (
         1 if autop_history.empty or "sim_block" not in autop_history.columns else int(autop_history["sim_block"].max()) + 1
     )
-    plan_id = datetime.utcnow().isoformat(timespec="seconds")
+    plan_id = datetime.now(timezone.utc).isoformat(timespec="seconds")
     auto_df["sim_block"] = block_id
     auto_df["sales_boost_pct"] = sales_boost_pct
     auto_df["plan_generated_at"] = plan_id
