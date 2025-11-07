@@ -72,7 +72,7 @@ with col_form:
         st.info(
             "Heads-up: please enter the current shelf stock for your first POS entry so we can auto-track it afterwards."
         )
-with st.form("pos-entry"):
+    with st.form("pos-entry"):
         now = datetime.now()
         entry_date = st.date_input("Date", value=now.date())
         entry_time = st.time_input("Time", value=time(hour=now.hour, minute=now.minute))
