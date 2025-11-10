@@ -33,7 +33,7 @@ DEFAULT_NAV: List[NavItem] = [
 def render_top_nav(
     active_page: str,
     nav_items: Iterable[NavItem] = DEFAULT_NAV,
-    show_logo: bool = True,
+    show_logo: bool = False,
 ) -> None:
     """Render a top nav bar that switches pages without opening new tabs."""
     st.markdown(
