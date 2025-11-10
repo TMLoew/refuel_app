@@ -22,12 +22,55 @@ from frontend.streamlit_app.services.data_utils import load_enriched_data
 PAGE_ICON = get_logo_path() or "📈"
 st.set_page_config(page_title="Statistics", page_icon=PAGE_ICON, layout="wide")
 
+TOOLTIP_STYLE = """
+<style>
+.tooltip-badge {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    color: #555;
+    font-size: 0.9rem;
+    border-bottom: 1px dotted #888;
+}
+.tooltip-badge .tooltip-content {
+    visibility: hidden;
+    width: 280px;
+    background-color: #262730;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 8px 10px;
+    position: absolute;
+    z-index: 10;
+    bottom: 125%;
+    left: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+    font-size: 0.8rem;
+}
+.tooltip-badge .tooltip-content::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 12px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #262730 transparent transparent transparent;
+}
+.tooltip-badge:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+</style>
+"""
 
-def hover_tip(label: str, tooltip: str) -> str:
-    """Return HTML span with a hover tooltip."""
-    safe_label = label
-    safe_tooltip = tooltip.replace('"', "&quot;")
-    return f'<span style="cursor:help; border-bottom:1px dotted #888;" title="{safe_tooltip}">{safe_label}</span>'
+st.markdown(TOOLTIP_STYLE, unsafe_allow_html=True)
+
+
+def hover_tip(label: str, tooltip: str) -> None:
+    """Render a hoverable badge with explanatory text."""
+    html = f'<span class="tooltip-badge">{label}<span class="tooltip-content">{tooltip}</span></span>'
+    st.markdown(html, unsafe_allow_html=True)
 
 render_top_nav("6_Statistics.py")
 st.title("Statistical Rundown")
@@ -71,24 +114,18 @@ corr_fig = px.imshow(
     title="Pearson correlation matrix",
 )
 st.plotly_chart(corr_fig, width="stretch")
-st.markdown(
-    hover_tip(
-        "Hover for correlation math",
-        "Pearson r = Σ(x - x̄)(y - ȳ) / sqrt[Σ(x - x̄)² Σ(y - ȳ)²], bounded between -1 and 1.",
-    ),
-    unsafe_allow_html=True,
+hover_tip(
+    "Hover for correlation math",
+    "Pearson r = Σ(x - x̄)(y - ȳ) / sqrt[Σ(x - x̄)² Σ(y - ȳ)²], bounded between -1 and 1.",
 )
 
 st.subheader("Pairwise relationships")
 pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
 pair_fig = px.scatter_matrix(window_df, dimensions=pair_cols, color="weather_label", title="Scatter matrix with weather classes")
 st.plotly_chart(pair_fig, width="stretch")
-st.markdown(
-    hover_tip(
-        "Hover for scatter-matrix math",
-        "Each panel plots raw pairs (x_i, y_i); diagonal histograms show marginals. Trendlines use y = β₀ + β₁x from ordinary least squares.",
-    ),
-    unsafe_allow_html=True,
+hover_tip(
+    "Hover for scatter-matrix math",
+    "Each panel plots raw pairs (x_i, y_i); diagonal histograms show marginals. Trendlines use y = β₀ + β₁x from ordinary least squares.",
 )
 
 st.subheader("Weather → attendance → snacks")
@@ -105,12 +142,9 @@ scatter_cols[0].plotly_chart(
     ),
     width="stretch",
 )
-st.markdown(
-    hover_tip(
-        "Hover for temperature → check-ins fit",
-        "OLS solves min Σ(y_i - (β₀ + β₁x_i))² with y = check-ins, x = temperature; weekend color shows categorical split.",
-    ),
-    unsafe_allow_html=True,
+hover_tip(
+    "Hover for temperature → check-ins fit",
+    "OLS solves min Σ(y_i - (β₀ + β₁x_i))² with y = check-ins, x = temperature; weekend color shows categorical split.",
 )
 st.markdown(
     r"""
@@ -133,12 +167,9 @@ scatter_cols[1].plotly_chart(
     ),
     width="stretch",
 )
-st.markdown(
-    hover_tip(
-        "Hover for precipitation → snacks fit",
-        "Same least-squares regression with y = snack units and x = precipitation; color adds weather label context.",
-    ),
-    unsafe_allow_html=True,
+hover_tip(
+    "Hover for precipitation → snacks fit",
+    "Same least-squares regression with y = snack units and x = precipitation; color adds weather label context.",
 )
 
 st.subheader("Regression diagnostics")
@@ -160,12 +191,9 @@ coef_table = pd.DataFrame(
 ).round(3)
 st.dataframe(coef_table, width="stretch")
 
-st.markdown(
-    hover_tip(
-        "Hover for regression math",
-        "Model: y = β₀ + β₁·temperature + β₂·precip + β₃·weekend + ε. Coefficients show marginal effect; p-values test H₀: β=0.",
-    ),
-    unsafe_allow_html=True,
+hover_tip(
+    "Hover for regression math",
+    "Model: y = β₀ + β₁·temperature + β₂·precip + β₃·weekend + ε. Coefficients show marginal effect; p-values test H₀: β=0.",
 )
 
 st.subheader("Daily decomposition")
@@ -183,12 +211,9 @@ daily_fig = px.line(
     title="Daily weather & demand trend",
 )
 st.plotly_chart(daily_fig, width="stretch")
-st.markdown(
-    hover_tip(
-        "Hover for daily aggregation math",
-        "Temp line averages all hours in a day (mean over H_d). Precip, check-ins, and snack units sum over the same hourly set.",
-    ),
-    unsafe_allow_html=True,
+hover_tip(
+    "Hover for daily aggregation math",
+    "Temp line averages all hours in a day (mean over H_d). Precip, check-ins, and snack units sum over the same hourly set.",
 )
 
 st.info(
