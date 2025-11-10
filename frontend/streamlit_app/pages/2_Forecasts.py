@@ -17,6 +17,7 @@ from frontend.streamlit_app.components.layout import (
     sidebar_info_block,
     render_footer,
     get_logo_path,
+    hover_tip,
 )
 from frontend.streamlit_app.services.data_utils import (
     CHECKIN_FEATURES,
@@ -37,55 +38,6 @@ from frontend.streamlit_app.services.data_utils import (
 
 PAGE_ICON = get_logo_path() or "🔮"
 st.set_page_config(page_title="Forecast Explorer", page_icon=PAGE_ICON, layout="wide")
-
-TOOLTIP_STYLE = """
-<style>
-.tooltip-badge {
-    position: relative;
-    display: inline-block;
-    cursor: help;
-    color: #555;
-    font-size: 0.9rem;
-    border-bottom: 1px dotted #888;
-    margin-left: 6px;
-}
-.tooltip-badge .tooltip-content {
-    visibility: hidden;
-    width: 280px;
-    background-color: #262730;
-    color: #fff;
-    text-align: left;
-    border-radius: 6px;
-    padding: 8px 10px;
-    position: absolute;
-    z-index: 10;
-    bottom: 125%;
-    left: 0;
-    opacity: 0;
-    transition: opacity 0.2s;
-    font-size: 0.8rem;
-}
-.tooltip-badge .tooltip-content::after {
-    content: "";
-    position: absolute;
-    top: 100%;
-    left: 12px;
-    border-width: 5px;
-    border-style: solid;
-    border-color: #262730 transparent transparent transparent;
-}
-.tooltip-badge:hover .tooltip-content {
-    visibility: visible;
-    opacity: 1;
-}
-</style>
-"""
-st.markdown(TOOLTIP_STYLE, unsafe_allow_html=True)
-
-
-def hover_tip(label: str, tooltip: str) -> None:
-    html = f'<span class="tooltip-badge">{label}<span class="tooltip-content">{tooltip}</span></span>'
-    st.markdown(html, unsafe_allow_html=True)
 
 render_top_nav("2_Forecasts.py")
 st.title("Forecast Explorer")
@@ -458,24 +410,29 @@ if not snack_df.empty:
 # --- Feature sensitivity --------------------------------------------------------
 checkin_model, snack_model = models
 if checkin_model is not None:
-    coefs = checkin_model.named_steps["model"].coef_
-    impact = (
-        pd.DataFrame({"feature": CHECKIN_FEATURES, "coef": coefs})
-        .sort_values("coef", key=lambda s: np.abs(s), ascending=False)
-        .head(8)
-    )
-    impact_fig = px.bar(
-        impact,
-        x="coef",
-        y="feature",
-        orientation="h",
-        color="coef",
-        color_continuous_scale="RdBu",
-        title="Model coefficient (standardized features)",
-    )
-    impact_fig.update_layout(coloraxis_showscale=False)
-
-    st.plotly_chart(impact_fig, width="stretch")
+    model_core = checkin_model.named_steps.get("model", checkin_model) if isinstance(checkin_model, Pipeline) else checkin_model
+    importances = getattr(model_core, "feature_importances_", None)
+    value_label = "importance"
+    if importances is None and hasattr(model_core, "coef_"):
+        importances = model_core.coef_
+        value_label = "coef"
+    if importances is not None:
+        impact = (
+            pd.DataFrame({"feature": CHECKIN_FEATURES, value_label: importances})
+            .sort_values(value_label, key=lambda s: np.abs(s), ascending=False)
+            .head(8)
+        )
+        impact_fig = px.bar(
+            impact,
+            x=value_label,
+            y="feature",
+            orientation="h",
+            color=value_label,
+            color_continuous_scale="RdBu",
+            title="Model feature influence",
+        )
+        impact_fig.update_layout(coloraxis_showscale=False)
+        st.plotly_chart(impact_fig, width="stretch")
 
 # --- Residual diagnostics -------------------------------------------------------
 if checkin_model is not None:

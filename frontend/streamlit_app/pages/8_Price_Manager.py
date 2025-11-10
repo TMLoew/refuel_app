@@ -51,6 +51,7 @@ else:
     merged = price_df.copy()
 
 st.subheader("Edit price list")
+st.info("Tip: After adjusting prices, re-run your dashboard/forecast tabs so the new values feed those models.")
 edited = st.data_editor(
     merged,
     num_rows="dynamic",
@@ -66,6 +67,7 @@ col_save, col_reset = st.columns(2)
 if col_save.button("Save prices", use_container_width=True):
     save_product_prices(edited)
     st.success("Prices saved to data/product_prices.csv")
+    st.info("Re-run your scenario or procurement pages to reflect the updated prices.")
 if col_reset.button("Reset to defaults", use_container_width=True):
     defaults = pd.DataFrame({"product": known_products, "unit_price": [DEFAULT_PRODUCT_PRICE] * len(known_products)})
     save_product_prices(defaults)

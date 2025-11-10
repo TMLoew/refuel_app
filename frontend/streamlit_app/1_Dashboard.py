@@ -12,7 +12,7 @@ import streamlit as st
 # Try absolute import first, but capture the exception so we can display the real cause if it
 # actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
 try:
-    from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+    from frontend.streamlit_app.components.layout import hover_tip, render_top_nav, sidebar_info_block
     from frontend.streamlit_app.services.data_utils import (
         CHECKIN_FEATURES,
         SNACK_FEATURES,
@@ -55,7 +55,7 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
 
     try:
         # Retry absolute imports now that paths are primed
-        from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+        from frontend.streamlit_app.components.layout import hover_tip, render_top_nav, sidebar_info_block
         from frontend.streamlit_app.services.data_utils import (
             CHECKIN_FEATURES,
             SNACK_FEATURES,
@@ -76,7 +76,7 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
     except Exception as _retry_abs_exc:
         # Fall back to local package-style imports (components/, services/ under streamlit_app)
         try:
-            from components.layout import render_top_nav, sidebar_info_block
+            from components.layout import hover_tip, render_top_nav, sidebar_info_block
             from services.data_utils import (
                 CHECKIN_FEATURES,
                 SNACK_FEATURES,
@@ -111,59 +111,6 @@ st.set_page_config(
     layout="wide",
     page_icon="💪",
 )
-
-
-TOOLTIP_STYLE = """
-<style>
-.tooltip-badge {
-    position: relative;
-    display: inline-block;
-    cursor: help;
-    color: #555;
-    font-size: 0.9rem;
-    border-bottom: 1px dotted #888;
-    margin-left: 6px;
-}
-.tooltip-badge .tooltip-content {
-    visibility: hidden;
-    width: 280px;
-    background-color: #262730;
-    color: #fff;
-    text-align: left;
-    border-radius: 6px;
-    padding: 8px 10px;
-    position: absolute;
-    z-index: 10;
-    bottom: 125%;
-    left: 0;
-    opacity: 0;
-    transition: opacity 0.2s;
-    font-size: 0.8rem;
-}
-.tooltip-badge .tooltip-content::after {
-    content: "";
-    position: absolute;
-    top: 100%;
-    left: 12px;
-    border-width: 5px;
-    border-style: solid;
-    border-color: #262730 transparent transparent transparent;
-}
-.tooltip-badge:hover .tooltip-content {
-    visibility: visible;
-    opacity: 1;
-}
-</style>
-"""
-
-st.markdown(TOOLTIP_STYLE, unsafe_allow_html=True)
-
-
-def hover_tip(label: str, tooltip: str) -> None:
-    """Render a small hoverable info note."""
-    html = f'<span class="tooltip-badge">{label}<span class="tooltip-content">{tooltip}</span></span>'
-    st.markdown(html, unsafe_allow_html=True)
-
 
 
 def render_summary_cards(df: pd.DataFrame) -> None:
@@ -437,6 +384,11 @@ def render_dashboard() -> None:
             latest_mix["product"].map(price_map).fillna(DEFAULT_PRODUCT_PRICE).round(2)
         )
         latest_mix["cost_estimate"] = latest_mix["suggested_qty"] * latest_mix["unit_price"]
+        days_old = (pd.Timestamp.now().normalize() - latest_mix_date.normalize()).days
+        if days_old > 1:
+            st.warning(
+                f"Product mix snapshot is {days_old} day(s) old. Update `data/product_mix_daily.csv` to reflect the latest plan."
+            )
         mix_cols = st.columns(3)
         mix_cols[0].metric("Snapshot date", latest_mix_date.strftime("%Y-%m-%d"))
         mix_cols[1].metric("Visitors plan", f"{int(latest_mix['visitors'].iloc[0]):,}")

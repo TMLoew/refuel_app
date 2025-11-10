@@ -11,9 +11,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 
 from .weather_pipeline import (
     Ingredient,
@@ -201,16 +200,32 @@ def train_models(df: pd.DataFrame) -> Tuple[Pipeline, Pipeline]:
         raise ValueError(f"Missing engineered features: {missing}")
     checkin_model = Pipeline(
         [
-            ("scale", StandardScaler()),
-            ("model", LinearRegression()),
+            (
+                "model",
+                HistGradientBoostingRegressor(
+                    max_depth=6,
+                    learning_rate=0.12,
+                    max_iter=250,
+                    l2_regularization=0.1,
+                    random_state=42,
+                ),
+            )
         ]
     )
     checkin_model.fit(feature_df[CHECKIN_FEATURES], feature_df["checkins"])
 
     snack_model = Pipeline(
         [
-            ("scale", StandardScaler()),
-            ("model", LinearRegression()),
+            (
+                "model",
+                HistGradientBoostingRegressor(
+                    max_depth=6,
+                    learning_rate=0.12,
+                    max_iter=300,
+                    l2_regularization=0.1,
+                    random_state=7,
+                ),
+            )
         ]
     )
     snack_model.fit(feature_df[SNACK_FEATURES], feature_df["snack_units"])

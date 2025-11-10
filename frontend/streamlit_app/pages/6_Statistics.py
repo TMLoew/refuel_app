@@ -16,61 +16,12 @@ from frontend.streamlit_app.components.layout import (
     sidebar_info_block,
     render_footer,
     get_logo_path,
+    hover_tip,
 )
 from frontend.streamlit_app.services.data_utils import load_enriched_data
 
 PAGE_ICON = get_logo_path() or "📈"
 st.set_page_config(page_title="Statistics", page_icon=PAGE_ICON, layout="wide")
-
-TOOLTIP_STYLE = """
-<style>
-.tooltip-badge {
-    position: relative;
-    display: inline-block;
-    cursor: help;
-    color: #555;
-    font-size: 0.9rem;
-    border-bottom: 1px dotted #888;
-}
-.tooltip-badge .tooltip-content {
-    visibility: hidden;
-    width: 280px;
-    background-color: #262730;
-    color: #fff;
-    text-align: left;
-    border-radius: 6px;
-    padding: 8px 10px;
-    position: absolute;
-    z-index: 10;
-    bottom: 125%;
-    left: 0;
-    opacity: 0;
-    transition: opacity 0.2s;
-    font-size: 0.8rem;
-}
-.tooltip-badge .tooltip-content::after {
-    content: "";
-    position: absolute;
-    top: 100%;
-    left: 12px;
-    border-width: 5px;
-    border-style: solid;
-    border-color: #262730 transparent transparent transparent;
-}
-.tooltip-badge:hover .tooltip-content {
-    visibility: visible;
-    opacity: 1;
-}
-</style>
-"""
-
-st.markdown(TOOLTIP_STYLE, unsafe_allow_html=True)
-
-
-def hover_tip(label: str, tooltip: str) -> None:
-    """Render a hoverable badge with explanatory text."""
-    html = f'<span class="tooltip-badge">{label}<span class="tooltip-content">{tooltip}</span></span>'
-    st.markdown(html, unsafe_allow_html=True)
 
 render_top_nav("6_Statistics.py")
 st.title("Statistical Rundown")
