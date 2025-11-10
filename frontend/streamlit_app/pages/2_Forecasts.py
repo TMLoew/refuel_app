@@ -26,6 +26,7 @@ from frontend.streamlit_app.services.data_utils import (
     build_daily_forecast,
     build_scenario_forecast,
     load_enriched_data,
+    load_procurement_plan,
     load_product_mix_data,
     load_restock_policy,
     save_procurement_plan,
