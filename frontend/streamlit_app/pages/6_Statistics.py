@@ -64,11 +64,27 @@ corr_fig = px.imshow(
     title="Pearson correlation matrix",
 )
 st.plotly_chart(corr_fig, width="stretch")
+st.markdown(
+    r"""
+    *Correlation math*: for any pair of series \(x, y\) the cell shows
+    \[
+    r_{xy} = \frac{\sum_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y})}{\sqrt{\sum_{i=1}^{n}(x_i-\bar{x})^2}\sqrt{\sum_{i=1}^{n}(y_i-\bar{y})^2}}
+    \]
+    which scales covariance into the \([-1,1]\) range.
+    """
+)
 
 st.subheader("Pairwise relationships")
 pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
 pair_fig = px.scatter_matrix(window_df, dimensions=pair_cols, color="weather_label", title="Scatter matrix with weather classes")
 st.plotly_chart(pair_fig, width="stretch")
+st.markdown(
+    r"""
+    *Scatter matrix math*: each off-diagonal panel shows the raw pairs \((x_i, y_i)\);
+    diagonals show the marginal distribution of each variable. Trendlines rely on the
+    simple least-squares fit \(y = \beta_0 + \beta_1 x\).
+    """
+)
 
 st.subheader("Weather → attendance → snacks")
 scatter_cols = st.columns(2)
@@ -84,6 +100,15 @@ scatter_cols[0].plotly_chart(
     ),
     width="stretch",
 )
+st.markdown(
+    r"""
+    *Linear fit*: the dashed trendline solves
+    \[
+    \underset{\beta_0,\beta_1}{\arg\min} \sum_{i}(y_i - (\beta_0 + \beta_1 x_i))^2
+    \]
+    for \(y=\) check-ins and \(x=\) temperature, with color encoding the weekend dummy.
+    """
+)
 scatter_cols[1].plotly_chart(
     px.scatter(
         window_df,
@@ -95,6 +120,12 @@ scatter_cols[1].plotly_chart(
         title="Precipitation vs. snack demand",
     ),
     width="stretch",
+)
+st.markdown(
+    r"""
+    *Second fit*: same least-squares formulation but with \(y=\) snack units and
+    \(x=\) precipitation. Points are colored by the categorical weather label.
+    """
 )
 
 st.subheader("Regression diagnostics")
@@ -117,9 +148,11 @@ coef_table = pd.DataFrame(
 st.dataframe(coef_table, width="stretch")
 
 st.markdown(
-    """
+    r"""
 - **Coefficients (β)** quantify how much the outcome changes per unit shift in the predictor, controlling for the other variables.
 - **p-values** < 0.05 usually indicate statistically meaningful relationships in the current sample.
+<br>Formally the fitted model is \(y = \beta_0 + \beta_1 T + \beta_2 P + \beta_3 W + \epsilon\),
+with \(T=\) temperature, \(P=\) precipitation, \(W=\) weekend flag.
 """
 )
 
@@ -138,6 +171,20 @@ daily_fig = px.line(
     title="Daily weather & demand trend",
 )
 st.plotly_chart(daily_fig, width="stretch")
+st.markdown(
+    r"""
+    *Daily aggregation*: each line uses
+    \[
+    \text{metric}_{d} =
+    \begin{cases}
+        \frac{1}{|H_d|}\sum_{h \in H_d} \text{temp}_h & \text{for temperature}\\[4pt]
+        \sum_{h \in H_d} \text{precip}_h & \text{for precipitation}\\[4pt]
+        \sum_{h \in H_d} \text{checkins}_h, \sum_{h \in H_d} \text{snacks}_h & \text{for demand}
+    \end{cases}
+    \]
+    where \(H_d\) is the set of hourly observations for day \(d\).
+    """
+)
 
 st.info(
     "Use this page to validate demand hypotheses before configuring scenarios and automation on the other tabs."
