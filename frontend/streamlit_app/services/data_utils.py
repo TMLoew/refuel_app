@@ -82,6 +82,85 @@ CHECKIN_FEATURES = [
 SNACK_FEATURES = CHECKIN_FEATURES + ["checkins"]
 
 
+def _safe_precip_multiplier(numerator: float, denominator: float, floor: float = 0.05) -> float:
+    denominator = max(denominator, 0.05)
+    multiplier = numerator / denominator if denominator else 1.0
+    return max(floor, multiplier)
+
+
+@st.cache_data(show_spinner=False)
+def derive_weather_archetypes(history: pd.DataFrame) -> Dict[str, Dict[str, float]]:
+    """
+    Build data-driven archetypes (offsets/multipliers) from historical telemetry.
+    Falls back to the static scenarios if history is missing.
+    """
+    if history.empty:
+        return {}
+    required = {"temperature_c", "precipitation_mm", "humidity_pct"}
+    if not required.issubset(history.columns):
+        return {}
+
+    temp = history["temperature_c"].dropna()
+    precip = history["precipitation_mm"].dropna()
+    humidity = history["humidity_pct"].dropna()
+    if temp.empty or precip.empty or humidity.empty:
+        return {}
+
+    temp_med = float(temp.median())
+    temp_low = float(temp.quantile(0.25))
+    temp_high = float(temp.quantile(0.75))
+
+    precip_med = float(precip.median()) + 0.05
+    precip_low = float(precip.quantile(0.25)) + 0.02
+    precip_high = float(precip.quantile(0.75)) + 0.1
+
+    humidity_med = float(humidity.median())
+    humidity_low = float(humidity.quantile(0.25))
+    humidity_high = float(humidity.quantile(0.75))
+
+    archetypes = {
+        "Historical cool & wet": {
+            "temp_offset": temp_low - temp_med,
+            "precip_multiplier": _safe_precip_multiplier(precip_high, precip_med, floor=0.2),
+            "humidity_offset": humidity_high - humidity_med,
+        },
+        "Historical hot & dry": {
+            "temp_offset": temp_high - temp_med,
+            "precip_multiplier": _safe_precip_multiplier(precip_low, precip_med, floor=0.05),
+            "humidity_offset": humidity_low - humidity_med,
+        },
+        "Historical storm surge": {
+            "temp_offset": 0.5 * (temp_low - temp_med),
+            "precip_multiplier": _safe_precip_multiplier(precip_high + 0.15, precip_med, floor=0.4),
+            "humidity_offset": humidity_high - humidity_med + 2,
+        },
+        "Historical crisp morning": {
+            "temp_offset": temp_low - temp_med - 1.2,
+            "precip_multiplier": _safe_precip_multiplier(precip_low, precip_med, floor=0.05),
+            "humidity_offset": humidity_low - humidity_med,
+        },
+    }
+    return archetypes
+
+
+def combined_weather_scenarios(history: pd.DataFrame) -> Dict[str, Dict[str, float]]:
+    """Merge static scenarios with any data-driven archetypes derived from history."""
+    scenarios = dict(WEATHER_SCENARIOS)
+    scenarios.update(derive_weather_archetypes(history))
+    return scenarios
+
+
+def sample_weather_archetype(history: pd.DataFrame, random_state: Optional[int] = None) -> Tuple[str, Dict[str, float]]:
+    """Pick a random scenario (static or historical) for automated runs."""
+    scenarios = combined_weather_scenarios(history)
+    if not scenarios:
+        return "Temperate & sunny", WEATHER_SCENARIOS["Temperate & sunny"]
+    keys = list(scenarios.keys())
+    rng = np.random.default_rng(random_state)
+    choice = rng.choice(keys)
+    return choice, scenarios[choice]
+
+
 @st.cache_data(show_spinner=False)
 def load_enriched_data(
     csv_path: Path = DATA_FILE,
