@@ -109,6 +109,15 @@ st.set_page_config(
 )
 
 
+def hover_tip(label: str, tooltip: str) -> None:
+    """Render a small hoverable info note."""
+    safe_tooltip = tooltip.replace('"', "&quot;")
+    st.markdown(
+        f'<span style="cursor:help; font-size:0.9rem; color:#555;" title="{safe_tooltip}">{label}</span>',
+        unsafe_allow_html=True,
+    )
+
+
 
 def render_summary_cards(df: pd.DataFrame) -> None:
     recent = df.tail(24)
@@ -476,6 +485,10 @@ def render_dashboard() -> None:
     daily_forecast = build_daily_forecast(forecast_df)
     if (not daily_actuals.empty) or (not daily_forecast.empty):
         st.subheader("Daily snack outlook")
+        hover_tip(
+            "ℹ️ Aggregation math",
+            "Daily table sums hourly check-ins/snacks and compares them with forecasted sums. Forecast rows come from the same linear regressors but aggregated by date.",
+        )
         merged_daily = daily_actuals.merge(
             daily_forecast,
             on="date",
@@ -514,6 +527,10 @@ def render_dashboard() -> None:
         product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
         if not product_forecast.empty:
             st.caption("Next 3 days · snack demand split by merchandise plan")
+            hover_tip(
+                "ℹ️ Mix allocation",
+                "Product-level forecast multiplies each day's total snack prediction by its mix weight: units_i = weight_i × total_pred_snacks.",
+            )
             upcoming_dates = sorted(product_forecast["date"].unique())[:3]
             product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
             product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
@@ -533,6 +550,10 @@ def render_dashboard() -> None:
                 height=280,
             )
     st.subheader("What-if forecast")
+    hover_tip(
+        "ℹ️ Forecast math",
+        "Predictions come from two linear regressions: check-ins = β·features, snacks = γ·features (including weather shifts, events, and promo multipliers). Sliders alter the feature inputs before inference.",
+    )
     render_forecast_section(data, forecast_df)
 
 

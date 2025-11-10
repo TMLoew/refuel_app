@@ -22,6 +22,13 @@ from frontend.streamlit_app.services.data_utils import load_enriched_data
 PAGE_ICON = get_logo_path() or "📈"
 st.set_page_config(page_title="Statistics", page_icon=PAGE_ICON, layout="wide")
 
+
+def hover_tip(label: str, tooltip: str) -> str:
+    """Return HTML span with a hover tooltip."""
+    safe_label = label
+    safe_tooltip = tooltip.replace('"', "&quot;")
+    return f'<span style="cursor:help; border-bottom:1px dotted #888;" title="{safe_tooltip}">{safe_label}</span>'
+
 render_top_nav("6_Statistics.py")
 st.title("Statistical Rundown")
 st.caption("Understand how weather, gym attendance, and snack demand interact using descriptive and regression analytics.")
@@ -65,13 +72,11 @@ corr_fig = px.imshow(
 )
 st.plotly_chart(corr_fig, width="stretch")
 st.markdown(
-    r"""
-    *Correlation math*: for any pair of series \(x, y\) the cell shows
-    \[
-    r_{xy} = \frac{\sum_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y})}{\sqrt{\sum_{i=1}^{n}(x_i-\bar{x})^2}\sqrt{\sum_{i=1}^{n}(y_i-\bar{y})^2}}
-    \]
-    which scales covariance into the \([-1,1]\) range.
-    """
+    hover_tip(
+        "Hover for correlation math",
+        "Pearson r = Σ(x - x̄)(y - ȳ) / sqrt[Σ(x - x̄)² Σ(y - ȳ)²], bounded between -1 and 1.",
+    ),
+    unsafe_allow_html=True,
 )
 
 st.subheader("Pairwise relationships")
@@ -79,11 +84,11 @@ pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
 pair_fig = px.scatter_matrix(window_df, dimensions=pair_cols, color="weather_label", title="Scatter matrix with weather classes")
 st.plotly_chart(pair_fig, width="stretch")
 st.markdown(
-    r"""
-    *Scatter matrix math*: each off-diagonal panel shows the raw pairs \((x_i, y_i)\);
-    diagonals show the marginal distribution of each variable. Trendlines rely on the
-    simple least-squares fit \(y = \beta_0 + \beta_1 x\).
-    """
+    hover_tip(
+        "Hover for scatter-matrix math",
+        "Each panel plots raw pairs (x_i, y_i); diagonal histograms show marginals. Trendlines use y = β₀ + β₁x from ordinary least squares.",
+    ),
+    unsafe_allow_html=True,
 )
 
 st.subheader("Weather → attendance → snacks")
@@ -99,6 +104,13 @@ scatter_cols[0].plotly_chart(
         title="Temperature vs. gym attendance",
     ),
     width="stretch",
+)
+st.markdown(
+    hover_tip(
+        "Hover for temperature → check-ins fit",
+        "OLS solves min Σ(y_i - (β₀ + β₁x_i))² with y = check-ins, x = temperature; weekend color shows categorical split.",
+    ),
+    unsafe_allow_html=True,
 )
 st.markdown(
     r"""
@@ -122,10 +134,11 @@ scatter_cols[1].plotly_chart(
     width="stretch",
 )
 st.markdown(
-    r"""
-    *Second fit*: same least-squares formulation but with \(y=\) snack units and
-    \(x=\) precipitation. Points are colored by the categorical weather label.
-    """
+    hover_tip(
+        "Hover for precipitation → snacks fit",
+        "Same least-squares regression with y = snack units and x = precipitation; color adds weather label context.",
+    ),
+    unsafe_allow_html=True,
 )
 
 st.subheader("Regression diagnostics")
@@ -148,12 +161,11 @@ coef_table = pd.DataFrame(
 st.dataframe(coef_table, width="stretch")
 
 st.markdown(
-    r"""
-- **Coefficients (β)** quantify how much the outcome changes per unit shift in the predictor, controlling for the other variables.
-- **p-values** < 0.05 usually indicate statistically meaningful relationships in the current sample.
-<br>Formally the fitted model is \(y = \beta_0 + \beta_1 T + \beta_2 P + \beta_3 W + \epsilon\),
-with \(T=\) temperature, \(P=\) precipitation, \(W=\) weekend flag.
-"""
+    hover_tip(
+        "Hover for regression math",
+        "Model: y = β₀ + β₁·temperature + β₂·precip + β₃·weekend + ε. Coefficients show marginal effect; p-values test H₀: β=0.",
+    ),
+    unsafe_allow_html=True,
 )
 
 st.subheader("Daily decomposition")
@@ -172,18 +184,11 @@ daily_fig = px.line(
 )
 st.plotly_chart(daily_fig, width="stretch")
 st.markdown(
-    r"""
-    *Daily aggregation*: each line uses
-    \[
-    \text{metric}_{d} =
-    \begin{cases}
-        \frac{1}{|H_d|}\sum_{h \in H_d} \text{temp}_h & \text{for temperature}\\[4pt]
-        \sum_{h \in H_d} \text{precip}_h & \text{for precipitation}\\[4pt]
-        \sum_{h \in H_d} \text{checkins}_h, \sum_{h \in H_d} \text{snacks}_h & \text{for demand}
-    \end{cases}
-    \]
-    where \(H_d\) is the set of hourly observations for day \(d\).
-    """
+    hover_tip(
+        "Hover for daily aggregation math",
+        "Temp line averages all hours in a day (mean over H_d). Precip, check-ins, and snack units sum over the same hourly set.",
+    ),
+    unsafe_allow_html=True,
 )
 
 st.info(
