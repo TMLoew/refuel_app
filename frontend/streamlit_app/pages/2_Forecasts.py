@@ -11,6 +11,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from sklearn.pipeline import Pipeline
 
 from frontend.streamlit_app.components.layout import (
     render_top_nav,
