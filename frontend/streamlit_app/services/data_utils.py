@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import json
+import math
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,6 +33,14 @@ PROCUREMENT_PLAN_FILE = PROJECT_ROOT / "data" / "procurement_plan.csv"
 POS_LOG_FILE = PROJECT_ROOT / "data" / "pos_runtime_log.csv"
 PRODUCT_MIX_FILE = PROJECT_ROOT / "data" / "product_mix_daily.csv"
 PRODUCT_MIX_SNAPSHOT_FILE = PROJECT_ROOT / "data" / "product_mix_enriched.csv"
+RESTOCK_POLICY_FILE = PROJECT_ROOT / "data" / "restock_policy.json"
+DEFAULT_RESTOCK_POLICY: Dict[str, Any] = {
+    "auto_enabled": False,
+    "threshold_units": 40,
+    "lot_size": 50,
+    "cooldown_hours": 6,
+    "last_auto_restock": None,
+}
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},
@@ -313,6 +323,13 @@ def load_product_mix_data(csv_path: Path = PRODUCT_MIX_FILE) -> pd.DataFrame:
     return df
 
 
+def get_product_catalog(product_mix: pd.DataFrame) -> List[str]:
+    """Return a sorted list of unique product names from the mix file."""
+    if product_mix.empty or "product" not in product_mix.columns:
+        return []
+    return sorted(product_mix["product"].dropna().unique().tolist())
+
+
 def build_daily_product_mix_view(telemetry: pd.DataFrame, product_mix: pd.DataFrame) -> pd.DataFrame:
     """Merge daily telemetry aggregates with mix recommendations."""
     if telemetry.empty or product_mix.empty:
@@ -341,6 +358,59 @@ def build_daily_product_mix_view(telemetry: pd.DataFrame, product_mix: pd.DataFr
     return merged
 
 
+def compute_daily_actuals(telemetry: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate telemetry to daily totals for check-ins and snack demand."""
+    if telemetry.empty or "timestamp" not in telemetry.columns:
+        return pd.DataFrame()
+    daily = (
+        telemetry.assign(date=pd.to_datetime(telemetry["timestamp"]).dt.normalize())
+        .groupby("date")
+        .agg(
+            actual_checkins=("checkins", "sum"),
+            actual_snack_units=("snack_units", "sum"),
+            actual_snack_revenue=("snack_revenue", "sum"),
+            avg_temp_c=("temperature_c", "mean"),
+            avg_precip_mm=("precipitation_mm", "mean"),
+        )
+        .reset_index()
+    )
+    return daily
+
+
+def build_daily_forecast(forecast: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate hourly scenario forecast to daily totals."""
+    if forecast.empty or "timestamp" not in forecast.columns:
+        return pd.DataFrame()
+    daily = (
+        forecast.assign(date=pd.to_datetime(forecast["timestamp"]).dt.normalize())
+        .groupby("date")
+        .agg(
+            pred_checkins=("pred_checkins", "sum"),
+            pred_snack_units=("pred_snack_units", "sum"),
+            pred_snack_revenue=("pred_snack_revenue", "sum"),
+            avg_temp_c=("temperature_c", "mean"),
+            avg_precip_mm=("precipitation_mm", "mean"),
+        )
+        .reset_index()
+    )
+    return daily
+
+
+def allocate_product_level_forecast(
+    daily_forecast: pd.DataFrame, product_mix: pd.DataFrame
+) -> pd.DataFrame:
+    """Distribute daily snack forecasts across products using mix weights."""
+    if daily_forecast.empty or product_mix.empty:
+        return pd.DataFrame()
+    mix = product_mix.copy()
+    mix["date"] = pd.to_datetime(mix["date"]).dt.normalize()
+    merged = mix.merge(daily_forecast[["date", "pred_snack_units"]], on="date", how="inner")
+    if merged.empty or "weight" not in merged.columns:
+        return pd.DataFrame()
+    merged["forecast_units"] = merged["pred_snack_units"] * merged["weight"]
+    return merged
+
+
 def save_product_mix_snapshot(snapshot: pd.DataFrame, metadata: Optional[Dict[str, str]] = None) -> None:
     """Persist the merged product mix view for downstream pages."""
     if snapshot.empty:
@@ -365,10 +435,16 @@ def load_product_mix_snapshot() -> pd.DataFrame:
     return df
 
 
-def append_pos_log(entry: Dict[str, float]) -> None:
+def append_pos_log(entry: Dict[str, Any]) -> None:
     """Append a single POS entry to the runtime log."""
     POS_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    df = pd.DataFrame([entry])
+    record = entry.copy()
+    breakdown = record.get("product_breakdown")
+    if isinstance(breakdown, dict):
+        record["product_breakdown"] = json.dumps(breakdown)
+    elif breakdown in (None, "", []):
+        record["product_breakdown"] = ""
+    df = pd.DataFrame([record])
     header = not POS_LOG_FILE.exists()
     df.to_csv(POS_LOG_FILE, mode="a", header=header, index=False)
 
@@ -380,4 +456,80 @@ def load_pos_log() -> pd.DataFrame:
     df = pd.read_csv(POS_LOG_FILE)
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"])
+    if "product_breakdown" not in df.columns:
+        df["product_breakdown"] = [{} for _ in range(len(df))]
+    else:
+        df["product_breakdown"] = df["product_breakdown"].apply(_safe_load_breakdown)
     return df
+
+
+def load_restock_policy() -> Dict[str, Any]:
+    """Load persisted auto-restock preferences."""
+    policy = DEFAULT_RESTOCK_POLICY.copy()
+    if RESTOCK_POLICY_FILE.exists():
+        try:
+            stored = json.loads(RESTOCK_POLICY_FILE.read_text())
+            if isinstance(stored, dict):
+                policy.update(stored)
+        except Exception:
+            pass
+    return policy
+
+
+def save_restock_policy(policy: Dict[str, Any]) -> None:
+    """Persist auto-restock preferences."""
+    RESTOCK_POLICY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    export = DEFAULT_RESTOCK_POLICY.copy()
+    export.update(policy)
+    RESTOCK_POLICY_FILE.write_text(json.dumps(export, indent=2))
+
+
+def should_auto_restock(current_stock: float, policy: Dict[str, Any]) -> bool:
+    """Determine whether an automatic restock should be triggered."""
+    if current_stock is None:
+        return False
+    if not policy.get("auto_enabled", False):
+        return False
+    threshold = policy.get("threshold_units", DEFAULT_RESTOCK_POLICY["threshold_units"])
+    if current_stock >= threshold:
+        return False
+    cooldown_hours = policy.get("cooldown_hours", DEFAULT_RESTOCK_POLICY["cooldown_hours"])
+    last_event = policy.get("last_auto_restock")
+    if last_event:
+        try:
+            last_dt = datetime.fromisoformat(str(last_event))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            last_dt = None
+        if last_dt:
+            elapsed = datetime.now(timezone.utc) - last_dt
+            if elapsed < timedelta(hours=cooldown_hours):
+                return False
+    return True
+
+
+def mark_auto_restock(policy: Dict[str, Any]) -> Dict[str, Any]:
+    """Update restock policy metadata after an automatic restock action."""
+    updated = policy.copy()
+    updated["last_auto_restock"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    save_restock_policy(updated)
+    return updated
+
+
+def _safe_load_breakdown(value: Any) -> Dict[str, float]:
+    if value is None:
+        return {}
+    if isinstance(value, float) and math.isnan(value):
+        return {}
+    if value == "":
+        return {}
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, dict):
+            return {str(k): float(v) for k, v in parsed.items()}
+    except Exception:
+        pass
+    return {}

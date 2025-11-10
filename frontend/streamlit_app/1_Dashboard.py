@@ -18,11 +18,15 @@ try:
         SNACK_FEATURES,
         SNACK_PROMOS,
         WEATHER_SCENARIOS,
+        allocate_product_level_forecast,
+        build_daily_forecast,
         build_scenario_forecast,
         build_daily_product_mix_view,
+        compute_daily_actuals,
         load_enriched_data,
         load_product_mix_data,
         load_product_mix_snapshot,
+        load_restock_policy,
         save_product_mix_snapshot,
         train_models,
     )
@@ -55,11 +59,15 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             SNACK_FEATURES,
             SNACK_PROMOS,
             WEATHER_SCENARIOS,
+            allocate_product_level_forecast,
+            build_daily_forecast,
             build_scenario_forecast,
             build_daily_product_mix_view,
+            compute_daily_actuals,
             load_enriched_data,
             load_product_mix_data,
             load_product_mix_snapshot,
+            load_restock_policy,
             save_product_mix_snapshot,
             train_models,
         )
@@ -72,11 +80,15 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
                 SNACK_FEATURES,
                 SNACK_PROMOS,
                 WEATHER_SCENARIOS,
+                allocate_product_level_forecast,
+                build_daily_forecast,
                 build_scenario_forecast,
                 build_daily_product_mix_view,
+                compute_daily_actuals,
                 load_enriched_data,
                 load_product_mix_data,
                 load_product_mix_snapshot,
+                load_restock_policy,
                 save_product_mix_snapshot,
                 train_models,
             )
@@ -347,6 +359,13 @@ def render_dashboard() -> None:
         "snack_price_change": snack_price_change,
         "snack_promo": snack_promo,
     }
+    restock_policy = load_restock_policy()
+    restock_caption = (
+        f"Auto restock ON · floor {restock_policy.get('threshold_units', 40)}u · lot {restock_policy.get('lot_size', 50)}u"
+        if restock_policy.get("auto_enabled")
+        else "Auto restock OFF · configure policy in POS Console"
+    )
+    st.caption(restock_caption)
 
     render_summary_cards(data)
     render_history_charts(data)
@@ -453,6 +472,66 @@ def render_dashboard() -> None:
             action_col.success("Saved to data/product_mix_enriched.csv")
 
     forecast_df = build_scenario_forecast(data, models, scenario)
+    daily_actuals = compute_daily_actuals(data)
+    daily_forecast = build_daily_forecast(forecast_df)
+    if (not daily_actuals.empty) or (not daily_forecast.empty):
+        st.subheader("Daily snack outlook")
+        merged_daily = daily_actuals.merge(
+            daily_forecast,
+            on="date",
+            how="outer",
+            suffixes=("_actual", "_forecast"),
+        ).sort_values("date")
+        if not merged_daily.empty:
+            window_mask = merged_daily["date"] >= (merged_daily["date"].max() - pd.Timedelta(days=10))
+            merged_window = merged_daily[window_mask].copy()
+            merged_window["date"] = merged_window["date"].dt.strftime("%Y-%m-%d")
+            display_cols = [
+                "date",
+                "actual_checkins",
+                "pred_checkins",
+                "actual_snack_units",
+                "pred_snack_units",
+                "actual_snack_revenue",
+                "pred_snack_revenue",
+            ]
+            present_cols = [col for col in display_cols if col in merged_window.columns]
+            st.dataframe(
+                merged_window[present_cols].rename(
+                    columns={
+                        "date": "Date",
+                        "actual_checkins": "Actual check-ins",
+                        "pred_checkins": "Forecast check-ins",
+                        "actual_snack_units": "Actual snacks",
+                        "pred_snack_units": "Forecast snacks",
+                        "actual_snack_revenue": "Actual revenue",
+                        "pred_snack_revenue": "Forecast revenue",
+                    }
+                ),
+                width="stretch",
+                height=280,
+            )
+        product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
+        if not product_forecast.empty:
+            st.caption("Next 3 days · snack demand split by merchandise plan")
+            upcoming_dates = sorted(product_forecast["date"].unique())[:3]
+            product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
+            product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
+            st.dataframe(
+                product_window[
+                    ["date", "product", "forecast_units", "suggested_qty", "weight"]
+                ].rename(
+                    columns={
+                        "date": "Date",
+                        "product": "Product",
+                        "forecast_units": "Forecast units",
+                        "suggested_qty": "Plan units",
+                        "weight": "Mix weight",
+                    }
+                ).style.format({"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}"}),
+                width="stretch",
+                height=280,
+            )
     st.subheader("What-if forecast")
     render_forecast_section(data, forecast_df)
 

@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 from datetime import datetime, time, timedelta
+from typing import Dict
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
@@ -9,6 +10,9 @@ if str(ROOT_DIR) not in sys.path:
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
+def _slugify(label: str) -> str:
+    return "".join(ch.lower() if ch.isalnum() else "-" for ch in label)
 
 try:
     from frontend.streamlit_app.components.layout import (
@@ -22,7 +26,13 @@ try:
         append_pos_log,
         build_scenario_forecast,
         load_enriched_data,
+        load_product_mix_data,
         load_pos_log,
+        load_restock_policy,
+        mark_auto_restock,
+        save_restock_policy,
+        should_auto_restock,
+        get_product_catalog,
         train_models,
     )
 except ModuleNotFoundError:  # pragma: no cover
@@ -32,7 +42,13 @@ except ModuleNotFoundError:  # pragma: no cover
         append_pos_log,
         build_scenario_forecast,
         load_enriched_data,
+        load_product_mix_data,
         load_pos_log,
+        load_restock_policy,
+        mark_auto_restock,
+        save_restock_policy,
+        should_auto_restock,
+        get_product_catalog,
         train_models,
     )
 
@@ -57,6 +73,9 @@ if base_data.empty:
 
 models = train_models(base_data)
 log_df = load_pos_log()
+product_mix_df = load_product_mix_data()
+product_catalog = get_product_catalog(product_mix_df)
+restock_policy = load_restock_policy()
 latest_stock = None
 if not log_df.empty and "stock_remaining" in log_df.columns:
     latest_stock = int(
@@ -85,6 +104,19 @@ with col_form:
             step=1,
             help="If you added stock since the previous entry, capture it here.",
         )
+        per_product_sales: Dict[str, int] = {}
+        if product_catalog:
+            with st.expander("Optional: detail units by product", expanded=False):
+                st.caption("Overrides the total snack units input above when filled in.")
+                for product in product_catalog:
+                    widget_key = f"pos-sales-{_slugify(product)}"
+                    per_product_sales[product] = st.number_input(
+                        f"{product} units",
+                        min_value=0,
+                        value=0,
+                        step=1,
+                        key=widget_key,
+                    )
         if latest_stock is None:
             baseline_stock = st.number_input(
                 "Current stock on shelf (units)",
@@ -105,25 +137,50 @@ with col_form:
     if submitted:
         timestamp = datetime.combine(entry_date, entry_time)
         effective_stock_before = baseline_stock + restock_delta
-        stock_remaining = int(max(0, effective_stock_before - logged_sales))
+        product_breakdown = {product: qty for product, qty in per_product_sales.items() if qty > 0}
+        logged_units = sum(product_breakdown.values()) if product_breakdown else logged_sales
+        stock_remaining = int(max(0, effective_stock_before - logged_units))
         append_pos_log(
             {
                 "timestamp": timestamp.isoformat(),
-                "sales_units": int(logged_sales),
+                "sales_units": int(logged_units),
                 "checkins_recorded": int(logged_checkins),
                 "stock_remaining": stock_remaining,
                 "notes": notes,
+                "product_breakdown": product_breakdown,
             }
         )
         st.success(
             f"Entry captured. Auto-updated shelf stock to {stock_remaining:.0f} units after sales & restocks."
         )
         log_df = load_pos_log()
+        restock_policy = load_restock_policy()
         if not log_df.empty and "stock_remaining" in log_df.columns:
             latest_stock = int(
                 round(log_df.sort_values("timestamp", ascending=False)["stock_remaining"].iloc[0])
             )
             st.session_state["pos_stock_tip_dismissed"] = True
+        if should_auto_restock(stock_remaining, restock_policy):
+            lot_size = int(restock_policy.get("lot_size", 50))
+            auto_stock = stock_remaining + lot_size
+            append_pos_log(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "sales_units": 0,
+                    "checkins_recorded": 0,
+                    "stock_remaining": auto_stock,
+                    "notes": f"Auto restock +{lot_size} units (threshold {restock_policy.get('threshold_units')}u)",
+                    "product_breakdown": {},
+                }
+            )
+            restock_policy = mark_auto_restock(restock_policy)
+            st.warning(
+                f"Auto restock triggered (+{lot_size} units). Shelf stock reset to {auto_stock:.0f} units.",
+                icon="⚠️",
+            )
+            log_df = load_pos_log()
+            latest_stock = auto_stock
+            stock_remaining = auto_stock
 
     st.subheader("Recent entries")
     recent_entries = log_df.sort_values("timestamp", ascending=False).head(10).copy()
@@ -131,6 +188,12 @@ with col_form:
         if col in recent_entries.columns:
             numeric_series = pd.to_numeric(recent_entries[col], errors="coerce")
             recent_entries[col] = numeric_series.round().astype("Int64")
+    if "product_breakdown" in recent_entries.columns:
+        recent_entries["product_breakdown"] = recent_entries["product_breakdown"].apply(
+            lambda entry: ", ".join(f"{name}: {int(qty)}" for name, qty in entry.items())
+            if isinstance(entry, dict) and entry
+            else ""
+        )
     st.dataframe(recent_entries, width="stretch", height=260)
 
 with col_alert:
@@ -153,6 +216,47 @@ with col_alert:
     )
     next_restock_date = (datetime.now() + timedelta(days=reorder_days)).date()
     st.metric("Next planned restock", next_restock_date.strftime("%Y-%m-%d"), f"every {reorder_days} d")
+    with st.expander("Auto restock policy", expanded=False):
+        st.caption("Automatically logs a restock entry when stock dips below the configured floor.")
+        auto_enabled = st.checkbox(
+            "Enable auto restock",
+            value=restock_policy.get("auto_enabled", False),
+            key="pos-auto-restock-enabled",
+        )
+        threshold_units = st.number_input(
+            "Trigger threshold (units)",
+            min_value=5,
+            value=int(restock_policy.get("threshold_units", 40)),
+            step=5,
+            key="pos-auto-threshold",
+        )
+        auto_lot = st.number_input(
+            "Auto restock lot (units)",
+            min_value=5,
+            value=int(restock_policy.get("lot_size", 50)),
+            step=5,
+            key="pos-auto-lot",
+        )
+        cooldown_hours = st.number_input(
+            "Cooldown between auto restocks (hours)",
+            min_value=1,
+            value=int(restock_policy.get("cooldown_hours", 6)),
+            step=1,
+            key="pos-auto-cooldown",
+        )
+        last_auto = restock_policy.get("last_auto_restock", "never")
+        st.caption(f"Last auto restock: {last_auto or 'never'}")
+        if st.button("Save auto restock policy", key="pos-save-auto-policy"):
+            updated_policy = {
+                "auto_enabled": auto_enabled,
+                "threshold_units": threshold_units,
+                "lot_size": auto_lot,
+                "cooldown_hours": cooldown_hours,
+                "last_auto_restock": restock_policy.get("last_auto_restock"),
+            }
+            save_restock_policy(updated_policy)
+            restock_policy = updated_policy
+            st.success("Auto restock policy saved.")
     if st.button("Call restock now", key="pos-restock-btn"):
         if latest_stock is None:
             st.warning("Log an initial stock reading before triggering a restock.")
@@ -165,6 +269,7 @@ with col_alert:
                     "checkins_recorded": 0,
                     "stock_remaining": int(new_stock),
                     "notes": f"Manual restock +{restock_lot} units (coverage {reorder_days}d)",
+                    "product_breakdown": {},
                 }
             )
             st.success(f"Restock captured. Shelf stock now {int(new_stock)} units.")
