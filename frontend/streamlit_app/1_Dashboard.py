@@ -192,7 +192,7 @@ def render_weather_shotcast() -> None:
     lon = weather_pipeline.DEFAULT_LON
     iframe = f"""
     <iframe
-        src="https://www.rainviewer.com/map.html?loc={lat:.3f},{lon:.3f},9,oFa,1,1,0,0,0"
+        src="https://www.rainviewer.com/map.html?loc={lat:.3f},{lon:.3f},10,oFa,2,1,0,0,1"
         style="width:100%; height:330px; border:0; border-radius:12px;"
         allowfullscreen
     ></iframe>
