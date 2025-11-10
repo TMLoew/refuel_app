@@ -30,6 +30,7 @@ DATA_FILE = next((path for path in PREFERRED_DATASETS if path.exists()), PREFERR
 PROCUREMENT_PLAN_FILE = PROJECT_ROOT / "data" / "procurement_plan.csv"
 POS_LOG_FILE = PROJECT_ROOT / "data" / "pos_runtime_log.csv"
 PRODUCT_MIX_FILE = PROJECT_ROOT / "data" / "product_mix_daily.csv"
+PRODUCT_MIX_SNAPSHOT_FILE = PROJECT_ROOT / "data" / "product_mix_enriched.csv"
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},
@@ -307,6 +308,58 @@ def load_product_mix_data(csv_path: Path = PRODUCT_MIX_FILE) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     if df.empty:
         return df
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+    return df
+
+
+def build_daily_product_mix_view(telemetry: pd.DataFrame, product_mix: pd.DataFrame) -> pd.DataFrame:
+    """Merge daily telemetry aggregates with mix recommendations."""
+    if telemetry.empty or product_mix.empty:
+        return pd.DataFrame()
+    if "timestamp" not in telemetry.columns:
+        raise ValueError("Telemetry frame missing 'timestamp' column required for daily aggregation.")
+
+    telemetry = telemetry.copy()
+    telemetry["timestamp"] = pd.to_datetime(telemetry["timestamp"])
+    telemetry["date"] = telemetry["timestamp"].dt.normalize()
+    daily_actuals = (
+        telemetry.groupby("date")
+        .agg(
+            actual_checkins=("checkins", "sum"),
+            actual_snack_units=("snack_units", "sum"),
+            actual_snack_revenue=("snack_revenue", "sum"),
+            avg_temp_c=("temperature_c", "mean"),
+            avg_precip_mm=("precipitation_mm", "mean"),
+        )
+        .reset_index()
+    )
+    merged = product_mix.merge(daily_actuals, on="date", how="left")
+    if "weight" in merged.columns and "actual_snack_units" in merged.columns:
+        merged["implied_units"] = merged["actual_snack_units"] * merged["weight"]
+        merged["unit_gap"] = merged["suggested_qty"] - merged["implied_units"]
+    return merged
+
+
+def save_product_mix_snapshot(snapshot: pd.DataFrame, metadata: Optional[Dict[str, str]] = None) -> None:
+    """Persist the merged product mix view for downstream pages."""
+    if snapshot.empty:
+        return
+    PRODUCT_MIX_SNAPSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    export = snapshot.copy()
+    metadata = metadata or {}
+    for key, value in metadata.items():
+        export[key] = value
+    if "date" in export.columns:
+        export["date"] = pd.to_datetime(export["date"]).dt.strftime("%Y-%m-%d")
+    export.to_csv(PRODUCT_MIX_SNAPSHOT_FILE, index=False)
+
+
+def load_product_mix_snapshot() -> pd.DataFrame:
+    """Load the persisted merged product mix snapshot."""
+    if not PRODUCT_MIX_SNAPSHOT_FILE.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(PRODUCT_MIX_SNAPSHOT_FILE)
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"])
     return df

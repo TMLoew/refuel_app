@@ -32,6 +32,13 @@ python backend/app/services/pipeline.py
 - `data/` – sample telemetry (`gym_badges.csv`)
 - `logo.webp` – brand asset used across the UI
 
+## Data Inputs & Persistence
+
+- **Gym telemetry** – Drop hourly badge exports into `data/gym_badges_0630_2200_long.csv` (preferred) or `data/gym_badges.csv`. The loader auto-detects the first file it finds and enriches it with synthetic or live weather before the dashboard renders anything.
+- **Product mix planning** – Keep daily merchandising guidance in `data/product_mix_daily.csv`. At runtime the app uses `build_daily_product_mix_view()` to merge that daily plan with aggregated telemetry so you can compare suggested units vs. implied demand without mutating the raw sources.
+- **Snapshots** – Use the “Save snapshot” button in the dashboard’s Product Mix section to persist the merged view (including gaps and implied units) to `data/product_mix_enriched.csv`. Any Streamlit page or external notebook can reload it through `load_product_mix_snapshot()` for reproducible reviews.
+- **Procurement autopilot** – Running the autopilot simulation inside `Home.py` writes the latest recommendation to `data/procurement_plan.csv`, while POS events append to `data/pos_runtime_log.csv`.
+
 ## Dev Tips
 
 - Use the top navigation bar inside Streamlit to hop between modules.

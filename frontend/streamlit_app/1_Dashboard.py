@@ -1,7 +1,13 @@
 
 # --- Import bootstrap: make this file work from both local runs and Streamlit Cloud ---
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
 
 # Try absolute import first, but capture the exception so we can display the real cause if it
 # actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
@@ -13,8 +19,11 @@ try:
         SNACK_PROMOS,
         WEATHER_SCENARIOS,
         build_scenario_forecast,
+        build_daily_product_mix_view,
         load_enriched_data,
         load_product_mix_data,
+        load_product_mix_snapshot,
+        save_product_mix_snapshot,
         train_models,
     )
 except (ModuleNotFoundError, ImportError) as _abs_exc:
@@ -47,8 +56,11 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             SNACK_PROMOS,
             WEATHER_SCENARIOS,
             build_scenario_forecast,
+            build_daily_product_mix_view,
             load_enriched_data,
             load_product_mix_data,
+            load_product_mix_snapshot,
+            save_product_mix_snapshot,
             train_models,
         )
     except Exception as _retry_abs_exc:
@@ -61,8 +73,11 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
                 SNACK_PROMOS,
                 WEATHER_SCENARIOS,
                 build_scenario_forecast,
+                build_daily_product_mix_view,
                 load_enriched_data,
                 load_product_mix_data,
+                load_product_mix_snapshot,
+                save_product_mix_snapshot,
                 train_models,
             )
         except Exception as _local_exc:
@@ -386,6 +401,56 @@ def render_dashboard() -> None:
         )
     else:
         st.info("No product mix data detected. Upload `data/product_mix_daily.csv` to populate this snapshot.")
+
+    merged_mix_view = build_daily_product_mix_view(data, product_mix_df)
+    if not merged_mix_view.empty:
+        st.subheader("Plan vs telemetry (daily)")
+        st.caption("Daily rollup that compares suggested mix volume with actual snack demand.")
+        recent_window = merged_mix_view[
+            merged_mix_view["date"] >= merged_mix_view["date"].max() - pd.Timedelta(days=7)
+        ].copy()
+        if recent_window.empty:
+            recent_window = merged_mix_view.copy()
+        daily_rollup = (
+            recent_window.groupby("date")
+            .agg(
+                planned_visitors=("visitors", "first"),
+                actual_checkins=("actual_checkins", "first"),
+                planned_units=("suggested_qty", "sum"),
+                actual_units=("implied_units", "sum"),
+                gap_units=("unit_gap", "sum"),
+                avg_temp_c=("avg_temp_c", "first"),
+            )
+            .reset_index()
+            .sort_values("date", ascending=False)
+        )
+        daily_rollup["actual_units"] = daily_rollup["actual_units"].fillna(daily_rollup["planned_units"])
+        daily_rollup["gap_units"] = daily_rollup["gap_units"].fillna(0.0)
+        saved_snapshot = load_product_mix_snapshot()
+        last_saved_label = "Never"
+        if not saved_snapshot.empty and "date" in saved_snapshot.columns:
+            last_saved_label = saved_snapshot["date"].max().strftime("%Y-%m-%d")
+
+        table_col, action_col = st.columns([4, 1])
+        table_col.dataframe(
+            daily_rollup.rename(
+                columns={
+                    "date": "Date",
+                    "planned_visitors": "Planned visitors",
+                    "actual_checkins": "Actual check-ins",
+                    "planned_units": "Suggested units",
+                    "actual_units": "Implied units",
+                    "gap_units": "Unit gap",
+                    "avg_temp_c": "Avg temp (°C)",
+                }
+            ),
+            height=320,
+        )
+        action_col.markdown(f"Last snapshot:<br/>**{last_saved_label}**", unsafe_allow_html=True)
+        if action_col.button("Save snapshot", key="save-mix-snapshot", use_container_width=True):
+            metadata = {"snapshot_saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            save_product_mix_snapshot(merged_mix_view, metadata=metadata)
+            action_col.success("Saved to data/product_mix_enriched.csv")
 
     forecast_df = build_scenario_forecast(data, models, scenario)
     st.subheader("What-if forecast")
