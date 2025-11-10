@@ -16,8 +16,15 @@ from frontend.streamlit_app.components.layout import (
     sidebar_info_block,
     render_footer,
     get_logo_path,
-    hover_tip,
 )
+try:
+    from frontend.streamlit_app.components.layout import hover_tip
+except ImportError:
+    try:
+        from components.layout import hover_tip  # type: ignore
+    except ImportError:
+        def hover_tip(label: str, tooltip: str) -> None:
+            st.caption(f"{label}: {tooltip}")
 from frontend.streamlit_app.services.data_utils import load_enriched_data
 
 PAGE_ICON = get_logo_path() or "📈"

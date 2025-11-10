@@ -18,6 +18,14 @@ from frontend.streamlit_app.components.layout import (
     get_logo_path,
 )
 try:
+    from frontend.streamlit_app.components.layout import hover_tip
+except ImportError:
+    try:
+        from components.layout import hover_tip  # type: ignore
+    except ImportError:
+        def hover_tip(label: str, tooltip: str) -> None:
+            st.caption(f"{label}: {tooltip}")
+try:
     from frontend.streamlit_app.services.data_utils import (
         SNACK_PROMOS,
         WEATHER_SCENARIOS,

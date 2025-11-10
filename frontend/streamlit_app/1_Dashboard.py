@@ -12,7 +12,7 @@ import streamlit as st
 # Try absolute import first, but capture the exception so we can display the real cause if it
 # actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
 try:
-    from frontend.streamlit_app.components.layout import hover_tip, render_top_nav, sidebar_info_block
+    from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
     from frontend.streamlit_app.services.data_utils import (
         CHECKIN_FEATURES,
         SNACK_FEATURES,
@@ -55,7 +55,7 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
 
     try:
         # Retry absolute imports now that paths are primed
-        from frontend.streamlit_app.components.layout import hover_tip, render_top_nav, sidebar_info_block
+        from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
         from frontend.streamlit_app.services.data_utils import (
             CHECKIN_FEATURES,
             SNACK_FEATURES,
@@ -104,6 +104,15 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             _st.exception(_retry_abs_exc)
             _st.exception(_local_exc)
             raise
+
+try:
+    from frontend.streamlit_app.components.layout import hover_tip
+except ImportError:
+    try:
+        from components.layout import hover_tip  # type: ignore
+    except ImportError:
+        def hover_tip(label: str, tooltip: str) -> None:
+            st.caption(f"{label}: {tooltip}")
 # --- End import bootstrap ---
 
 st.set_page_config(
