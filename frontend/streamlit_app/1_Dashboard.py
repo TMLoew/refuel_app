@@ -403,7 +403,17 @@ def render_dashboard() -> None:
     render_summary_cards(data)
     render_history_charts(data)
     st.subheader("Weather shotcast")
-    st.caption("Open-Meteo radar/ cloud tiles centered on campus coordinates.")
+    info_col, btn_col = st.columns([0.75, 0.25])
+    info_col.caption("Windy radar & cloud layers centered on the configured coordinates.")
+    if btn_col.button("Center on St. Gallen", key="shotcast-center-root"):
+        save_weather_profile(
+            {
+                "lat": weather_pipeline.DEFAULT_LAT,
+                "lon": weather_pipeline.DEFAULT_LON,
+            }
+        )
+        st.success("Shotcast centered on St. Gallen.")
+        st.experimental_rerun()
     render_weather_shotcast()
 
     if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:

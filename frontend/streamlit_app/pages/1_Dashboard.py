@@ -35,6 +35,7 @@ try:
         load_enriched_data,
         load_procurement_plan,
         load_weather_profile,
+        save_weather_profile,
         train_models,
     )
     from frontend.streamlit_app.services import weather_pipeline
@@ -46,12 +47,16 @@ except ImportError as import_exc:  # fallback for older deployments missing load
         WEATHER_SCENARIOS,
         build_scenario_forecast,
         load_enriched_data,
+        load_weather_profile,
+        save_weather_profile,
         train_models,
     )
     from frontend.streamlit_app.services import weather_pipeline  # type: ignore
 
     def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
         return pd.DataFrame()
+    def save_weather_profile(profile: dict) -> None:  # type: ignore[misc]
+        pass
     def load_weather_profile() -> dict:  # type: ignore[misc]
         return {"lat": weather_pipeline.DEFAULT_LAT, "lon": weather_pipeline.DEFAULT_LON}
 
@@ -514,7 +519,17 @@ def render_dashboard() -> None:
     render_summary_cards(data)
     render_history_charts(data, history_days)
     st.subheader("Weather shotcast")
-    st.caption("Open-Meteo radar & cloud tiles centered on campus coordinates.")
+    caption_col, button_col = st.columns([0.75, 0.25])
+    caption_col.caption("Windy radar & cloud layers centered on the configured coordinates.")
+    if button_col.button("Center on St. Gallen", key="shotcast-center-page"):
+        save_weather_profile(
+            {
+                "lat": weather_pipeline.DEFAULT_LAT,
+                "lon": weather_pipeline.DEFAULT_LON,
+            }
+        )
+        st.success("Shotcast centered on St. Gallen.")
+        st.experimental_rerun()
     render_weather_shotcast()
 
     forecast_df = build_scenario_forecast(data, models, scenario)
