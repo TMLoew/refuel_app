@@ -36,6 +36,55 @@ from frontend.streamlit_app.services.data_utils import (
 PAGE_ICON = get_logo_path() or "🔮"
 st.set_page_config(page_title="Forecast Explorer", page_icon=PAGE_ICON, layout="wide")
 
+TOOLTIP_STYLE = """
+<style>
+.tooltip-badge {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    color: #555;
+    font-size: 0.9rem;
+    border-bottom: 1px dotted #888;
+    margin-left: 6px;
+}
+.tooltip-badge .tooltip-content {
+    visibility: hidden;
+    width: 280px;
+    background-color: #262730;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 8px 10px;
+    position: absolute;
+    z-index: 10;
+    bottom: 125%;
+    left: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+    font-size: 0.8rem;
+}
+.tooltip-badge .tooltip-content::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 12px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #262730 transparent transparent transparent;
+}
+.tooltip-badge:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+</style>
+"""
+st.markdown(TOOLTIP_STYLE, unsafe_allow_html=True)
+
+
+def hover_tip(label: str, tooltip: str) -> None:
+    html = f'<span class="tooltip-badge">{label}<span class="tooltip-content">{tooltip}</span></span>'
+    st.markdown(html, unsafe_allow_html=True)
+
 render_top_nav("2_Forecasts.py")
 st.title("Forecast Explorer")
 st.caption("Dig into the regression models, understand residuals, and inspect sensitivities before committing to a plan.")
@@ -119,6 +168,10 @@ if forecast_df.empty:
     st.warning("Need more telemetry to compute the forward forecast. Upload additional history first.")
 else:
     st.subheader(f"Scenario forecast · next {horizon_hours} hours")
+    hover_tip(
+        "ℹ️ Regression math",
+        "Forecast lines come from two linear regressions: check-ins = β·features, snacks = γ·features. Slider tweaks shift the feature inputs before inference.",
+    )
     history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=horizon_hours + 24)][
         ["timestamp", "checkins", "snack_units"]
     ].copy()
@@ -203,6 +256,10 @@ else:
     daily_forecast = build_daily_forecast(forecast_df)
     if not daily_forecast.empty:
         st.subheader("Daily rollup & product mix impact")
+        hover_tip(
+            "ℹ️ Daily aggregation math",
+            "Hourly predictions are summed per calendar day, then multiplied by each product's mix weight to allocate SKU-level units.",
+        )
         st.caption("Merges the scenario forecast with the merchandising guidance.")
         st.dataframe(
             daily_forecast.assign(date=daily_forecast["date"].dt.strftime("%Y-%m-%d"))[
@@ -255,6 +312,10 @@ else:
     if 'plan_payload' in locals() and not plan_payload.empty:
         with st.expander("Procurement actions", expanded=True):
             st.caption("Push this scenario into the shared procurement plan for downstream tabs.")
+            hover_tip(
+                "ℹ️ Plan math",
+                "The exported CSV includes daily forecast units plus the scenario metadata (weather, promo, price shifts) so downstream tabs can reproduce the assumptions.",
+            )
             generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             last_plan = load_procurement_plan()
             if not last_plan.empty and "plan_generated_at" in last_plan.columns:

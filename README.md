@@ -38,7 +38,13 @@ python backend/app/services/pipeline.py
 - **Product mix planning** – Keep daily merchandising guidance in `data/product_mix_daily.csv`. At runtime the app uses `build_daily_product_mix_view()` to merge that daily plan with aggregated telemetry so you can compare suggested units vs. implied demand without mutating the raw sources.
 - **Snapshots** – Use the “Save snapshot” button in the dashboard’s Product Mix section to persist the merged view (including gaps and implied units) to `data/product_mix_enriched.csv`. Any Streamlit page or external notebook can reload it through `load_product_mix_snapshot()` for reproducible reviews.
 - **POS console + restocks** – `data/pos_runtime_log.csv` now captures each counter entry with optional per-product breakdowns and current shelf stock. Auto-restock preferences live in `data/restock_policy.json` and can be managed from the POS Console.
-- **Procurement autopilot** – Running the autopilot simulation inside `Home.py` writes the latest recommendation to `data/procurement_plan.csv`, while Streamlit POS events append to `data/pos_runtime_log.csv`.
+- **Procurement autopilot** – Running the autopilot simulation inside `Home.py` or publishing a scenario from the Forecast Explorer writes to `data/procurement_plan.csv`. The file carries `plan_*` metadata columns (weather pattern, promo, horizon, etc.) that downstream tabs surface automatically. Streamlit POS events append to `data/pos_runtime_log.csv`.
+
+## Forecast Explorer & Scenarios
+
+- Dial in a scenario on `pages/2_Forecasts.py` (weather overrides, marketing boost, promo, horizon) to generate forward hourly predictions. Hover the ℹ️ badges beside each section to see the underlying math/formulas.
+- Download the hourly CSV for external analysis or publish the aggregated plan directly into `data/procurement_plan.csv`. The “Procurement actions” expander also shows the last published plan timestamp so you know if the shared plan reflects your scenario.
+- The “Daily rollup & product mix impact” table allocates forecasted snack demand across the merchandising mix using each product’s weight, giving procurement teams a SKU-level view for the next few days.
 
 ## Forecasting & Automation
 
