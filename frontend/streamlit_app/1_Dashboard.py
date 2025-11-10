@@ -26,6 +26,7 @@ try:
         build_daily_product_mix_view,
         compute_daily_actuals,
         get_product_price_map,
+        get_weather_coordinates,
         load_enriched_data,
         load_product_mix_data,
         load_product_mix_snapshot,
@@ -188,8 +189,7 @@ def render_history_charts(df: pd.DataFrame) -> None:
 
 
 def render_weather_shotcast() -> None:
-    lat = weather_pipeline.DEFAULT_LAT
-    lon = weather_pipeline.DEFAULT_LON
+    lat, lon = get_weather_coordinates()
     iframe = f"""
     <iframe
         src="https://embed.windy.com/embed2.html?lat={lat:.3f}&lon={lon:.3f}&zoom=8&level=surface&overlay=rainAccu&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&detailLat={lat:.3f}&detailLon={lon:.3f}&metricWind=default&metricTemp=default&radarRange=-1"

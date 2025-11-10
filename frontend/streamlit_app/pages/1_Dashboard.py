@@ -11,7 +11,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
-import streamlit.components.v1 as components
 
 from frontend.streamlit_app.components.layout import (
     render_top_nav,
@@ -27,6 +26,7 @@ except ImportError:
     except ImportError:
         def hover_tip(label: str, tooltip: str) -> None:
             st.caption(f"{label}: {tooltip}")
+
 try:
     from frontend.streamlit_app.services.data_utils import (
         SNACK_PROMOS,
@@ -34,6 +34,7 @@ try:
         build_scenario_forecast,
         load_enriched_data,
         load_procurement_plan,
+        load_weather_profile,
         train_models,
     )
     from frontend.streamlit_app.services import weather_pipeline
@@ -51,6 +52,8 @@ except ImportError as import_exc:  # fallback for older deployments missing load
 
     def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
         return pd.DataFrame()
+    def load_weather_profile() -> dict:  # type: ignore[misc]
+        return {"lat": weather_pipeline.DEFAULT_LAT, "lon": weather_pipeline.DEFAULT_LON}
 
 PAGE_ICON = get_logo_path() or "💪"
 st.set_page_config(
@@ -121,8 +124,8 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
 
 
 def render_weather_shotcast() -> None:
-    lat = weather_pipeline.DEFAULT_LAT
-    lon = weather_pipeline.DEFAULT_LON
+    profile = load_weather_profile()
+    lat, lon = profile["lat"], profile["lon"]
     iframe = f"""
     <iframe
         src="https://embed.windy.com/embed2.html?lat={lat:.3f}&lon={lon:.3f}&zoom=8&level=surface&overlay=rainAccu&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&detailLat={lat:.3f}&detailLon={lon:.3f}&metricWind=default&metricTemp=default&radarRange=-1"

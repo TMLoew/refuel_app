@@ -17,7 +17,12 @@ from frontend.streamlit_app.components.layout import (
     get_logo_path,
 )
 try:
-    from frontend.streamlit_app.services.data_utils import load_enriched_data, load_procurement_plan
+    from frontend.streamlit_app.services.data_utils import (
+        load_enriched_data,
+        load_procurement_plan,
+        load_weather_profile,
+        save_weather_profile,
+    )
 except ImportError as import_exc:
     if "load_procurement_plan" not in str(import_exc):
         raise
@@ -25,8 +30,10 @@ except ImportError as import_exc:
 
     def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
         return pd.DataFrame()
-from frontend.streamlit_app.services.weather_pipeline import DEFAULT_LAT, DEFAULT_LON
-
+    def load_weather_profile() -> dict:  # type: ignore[misc]
+        return {"lat": 47.4239, "lon": 9.3748, "api_timeout": 10, "cache_hours": 6}
+    def save_weather_profile(profile: dict) -> None:  # type: ignore[misc]
+        pass
 PAGE_ICON = get_logo_path() or "⚙️"
 st.set_page_config(page_title="Settings & APIs", page_icon=PAGE_ICON, layout="wide")
 
@@ -39,16 +46,18 @@ with st.sidebar:
     sidebar_info_block()
 
 st.subheader("Weather API configuration")
+profile = load_weather_profile()
 with st.form("weather-form"):
     col1, col2 = st.columns(2)
     with col1:
-        lat = st.number_input("Latitude", value=DEFAULT_LAT, step=0.1, format="%.4f")
+        lat = st.number_input("Latitude", value=float(profile["lat"]), step=0.1, format="%.4f")
         api_timeout = st.number_input("Timeout (seconds)", min_value=1, max_value=60, value=10)
     with col2:
-        lon = st.number_input("Longitude", value=DEFAULT_LON, step=0.1, format="%.4f")
-        cache_hours = st.slider("Cache horizon (hours)", 1, 24, 6)
+        lon = st.number_input("Longitude", value=float(profile["lon"]), step=0.1, format="%.4f")
+        cache_hours = st.slider("Cache horizon (hours)", 1, 24, int(profile.get("cache_hours", 6)))
     submitted = st.form_submit_button("Save weather profile", width="stretch")
     if submitted:
+        save_weather_profile({"lat": float(lat), "lon": float(lon), "api_timeout": api_timeout, "cache_hours": cache_hours})
         st.success(
             f"Saved weather coordinates ({lat:.4f}, {lon:.4f}) with timeout={api_timeout}s and cache={cache_hours}h."
         )

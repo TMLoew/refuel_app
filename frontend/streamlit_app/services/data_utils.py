@@ -34,6 +34,7 @@ POS_LOG_FILE = PROJECT_ROOT / "data" / "pos_runtime_log.csv"
 PRODUCT_MIX_FILE = PROJECT_ROOT / "data" / "product_mix_daily.csv"
 PRODUCT_MIX_SNAPSHOT_FILE = PROJECT_ROOT / "data" / "product_mix_enriched.csv"
 PRODUCT_PRICE_FILE = PROJECT_ROOT / "data" / "product_prices.csv"
+WEATHER_PROFILE_FILE = PROJECT_ROOT / "data" / "weather_profile.json"
 RESTOCK_POLICY_FILE = PROJECT_ROOT / "data" / "restock_policy.json"
 DEFAULT_PRODUCT_PRICE = 3.5
 DEFAULT_RESTOCK_POLICY: Dict[str, Any] = {
@@ -42,6 +43,12 @@ DEFAULT_RESTOCK_POLICY: Dict[str, Any] = {
     "lot_size": 50,
     "cooldown_hours": 6,
     "last_auto_restock": None,
+}
+DEFAULT_WEATHER_PROFILE = {
+    "lat": 47.4239,
+    "lon": 9.3748,
+    "api_timeout": 10,
+    "cache_hours": 6,
 }
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
@@ -397,6 +404,31 @@ def save_product_prices(prices: pd.DataFrame) -> None:
 def get_product_price_map() -> Dict[str, float]:
     df = load_product_prices()
     return {row["product"]: float(row["unit_price"]) for _, row in df.iterrows()}
+
+
+def load_weather_profile() -> Dict[str, Any]:
+    if WEATHER_PROFILE_FILE.exists():
+        try:
+            data = json.loads(WEATHER_PROFILE_FILE.read_text())
+            return {**DEFAULT_WEATHER_PROFILE, **data}
+        except Exception:
+            return DEFAULT_WEATHER_PROFILE.copy()
+    WEATHER_PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    WEATHER_PROFILE_FILE.write_text(json.dumps(DEFAULT_WEATHER_PROFILE, indent=2))
+    return DEFAULT_WEATHER_PROFILE.copy()
+
+
+def save_weather_profile(profile: Dict[str, Any]) -> None:
+    WEATHER_PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    payload = {**DEFAULT_WEATHER_PROFILE, **profile}
+    WEATHER_PROFILE_FILE.write_text(json.dumps(payload, indent=2))
+
+
+def get_weather_coordinates() -> Tuple[float, float]:
+    profile = load_weather_profile()
+    return float(profile.get("lat", DEFAULT_WEATHER_PROFILE["lat"])), float(
+        profile.get("lon", DEFAULT_WEATHER_PROFILE["lon"])
+    )
 
 
 def get_product_catalog(product_mix: pd.DataFrame) -> List[str]:
