@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+from datetime import datetime, timezone
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
@@ -19,8 +20,15 @@ from frontend.streamlit_app.components.layout import (
 )
 from frontend.streamlit_app.services.data_utils import (
     CHECKIN_FEATURES,
+    SNACK_PROMOS,
     WEATHER_SCENARIOS,
+    allocate_product_level_forecast,
+    build_daily_forecast,
+    build_scenario_forecast,
     load_enriched_data,
+    load_product_mix_data,
+    load_restock_policy,
+    save_procurement_plan,
     train_models,
 )
 
@@ -39,6 +47,13 @@ with st.sidebar:
     metric_focus = st.selectbox("Focus metric", ["checkins", "snack_units", "snack_revenue"])
     weather_profile = st.selectbox("Weather scenario override", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
     manual_temp_shift = st.slider("Manual temperature shift (°C)", -6, 6, 0, key="forecast-temp-shift")
+    manual_precip_shift = st.slider("Manual precipitation shift (mm)", -2.0, 2.0, 0.0, step=0.1, key="forecast-precip-shift")
+    horizon_hours = st.slider("Forecast horizon (hours)", 6, 72, 48, step=6, key="forecast-horizon")
+    with st.expander("Scenario levers", expanded=True):
+        event_intensity = st.slider("Event intensity", 0.2, 2.5, 1.0, 0.1, key="forecast-event")
+        marketing_boost_pct = st.slider("Marketing boost (%)", 0, 80, 10, 5, key="forecast-marketing")
+        snack_price_change = st.slider("Snack price change (%)", -30, 40, 0, 5, key="forecast-price")
+        snack_promo = st.selectbox("Snack activation", list(SNACK_PROMOS.keys()), index=0, key="forecast-promo")
     with st.expander("Snacks ↔ visits settings", expanded=False):
         snack_agg_mode = st.radio("Aggregation", ["Hourly", "Daily"], horizontal=True, key="snack-agg")
         color_dim = st.selectbox(
@@ -55,6 +70,8 @@ if data.empty:
     st.stop()
 
 models = train_models(data)
+product_mix_df = load_product_mix_data()
+restock_policy = load_restock_policy()
 
 latest_ts = data["timestamp"].max()
 history = data[data["timestamp"] >= latest_ts - pd.Timedelta(days=lookback_days)]
@@ -62,7 +79,7 @@ scenario = WEATHER_SCENARIOS[weather_profile]
 scenario_history = history.copy()
 scenario_history["temperature_c"] += scenario["temp_offset"] + manual_temp_shift
 scenario_history["precipitation_mm"] = np.clip(
-    scenario_history["precipitation_mm"] * scenario["precip_multiplier"],
+    scenario_history["precipitation_mm"] * scenario["precip_multiplier"] + manual_precip_shift,
     0,
     None,
 )
@@ -79,10 +96,185 @@ st.caption(
     f"Applied '{weather_profile}' scenario with temperature shift {manual_temp_shift:+}°C across the analysis views."
 )
 
+scenario_config = {
+    "horizon_hours": horizon_hours,
+    "weather_pattern": weather_profile,
+    "temp_manual": manual_temp_shift,
+    "precip_manual": manual_precip_shift,
+    "event_intensity": event_intensity,
+    "marketing_boost_pct": marketing_boost_pct,
+    "snack_price_change": snack_price_change,
+    "snack_promo": snack_promo,
+}
+forecast_df = build_scenario_forecast(data, models, scenario_config)
+
 col_a, col_b, col_c = st.columns(3)
 col_a.metric("Latest check-ins/hr", f"{scenario_history['checkins'].iloc[-1]:.0f}")
 col_b.metric("Snack revenue (24h)", f"€{scenario_history.tail(24)['snack_revenue'].sum():.0f}")
 col_c.metric("Weather source", data.attrs.get("weather_source", "synthetic").title())
+st.divider()
+
+if forecast_df.empty:
+    st.warning("Need more telemetry to compute the forward forecast. Upload additional history first.")
+else:
+    st.subheader(f"Scenario forecast · next {horizon_hours} hours")
+    history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=horizon_hours + 24)][
+        ["timestamp", "checkins", "snack_units"]
+    ].copy()
+    history_window.rename(
+        columns={"checkins": "actual_checkins", "snack_units": "actual_snacks"},
+        inplace=True,
+    )
+    future_plot = forecast_df[["timestamp", "pred_checkins", "pred_snack_units"]].copy()
+    combined = history_window.merge(future_plot, on="timestamp", how="outer").sort_values("timestamp")
+    forecast_fig = go.Figure()
+    forecast_fig.add_trace(
+        go.Scatter(
+            x=combined["timestamp"],
+            y=combined["actual_checkins"],
+            mode="lines",
+            name="Actual check-ins",
+            line=dict(color="#2E86AB"),
+        )
+    )
+    forecast_fig.add_trace(
+        go.Scatter(
+            x=combined["timestamp"],
+            y=combined["pred_checkins"],
+            mode="lines",
+            name="Forecast check-ins",
+            line=dict(color="#2E86AB", dash="dash"),
+        )
+    )
+    forecast_fig.add_trace(
+        go.Scatter(
+            x=combined["timestamp"],
+            y=combined["actual_snacks"],
+            mode="lines",
+            name="Actual snack units",
+            line=dict(color="#F18F01"),
+            yaxis="y2",
+        )
+    )
+    forecast_fig.add_trace(
+        go.Scatter(
+            x=combined["timestamp"],
+            y=combined["pred_snack_units"],
+            mode="lines",
+            name="Forecast snack units",
+            line=dict(color="#F18F01", dash="dash"),
+            yaxis="y2",
+        )
+    )
+    forecast_fig.update_layout(
+        xaxis_title="Timestamp",
+        yaxis_title="Check-ins",
+        yaxis2=dict(title="Snack units", overlaying="y", side="right"),
+        height=420,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        shapes=[
+            dict(
+                type="rect",
+                xref="x",
+                yref="paper",
+                x0=data["timestamp"].max(),
+                x1=forecast_df["timestamp"].max(),
+                y0=0,
+                y1=1,
+                fillcolor="rgba(46,134,171,0.08)",
+                line=dict(width=0),
+            )
+        ],
+    )
+    st.plotly_chart(forecast_fig, use_container_width=True)
+
+    dl_col, stat_col = st.columns([1, 1])
+    csv_bytes = forecast_df.to_csv(index=False).encode("utf-8")
+    dl_col.download_button(
+        "⬇️ Download forecast CSV",
+        data=csv_bytes,
+        file_name="forecast_hours.csv",
+        mime="text/csv",
+    )
+    total_units = forecast_df["pred_snack_units"].sum()
+    stat_col.metric("Total snacks forecast", f"{total_units:.0f} units", f"{forecast_df['pred_snack_units'].mean():.1f}/hr")
+
+    daily_forecast = build_daily_forecast(forecast_df)
+    if not daily_forecast.empty:
+        st.subheader("Daily rollup & product mix impact")
+        st.caption("Merges the scenario forecast with the merchandising guidance.")
+        st.dataframe(
+            daily_forecast.assign(date=daily_forecast["date"].dt.strftime("%Y-%m-%d"))[
+                ["date", "pred_checkins", "pred_snack_units", "pred_snack_revenue"]
+            ].rename(
+                columns={
+                    "date": "Date",
+                    "pred_checkins": "Forecast check-ins",
+                    "pred_snack_units": "Forecast snacks",
+                    "pred_snack_revenue": "Forecast revenue (€)",
+                }
+            ),
+            use_container_width=True,
+            height=260,
+        )
+        product_allocation = allocate_product_level_forecast(daily_forecast, product_mix_df)
+        plan_payload = daily_forecast.assign(product="All snacks", forecast_units=daily_forecast["pred_snack_units"]).copy()
+        if not product_allocation.empty:
+            st.caption("Next 3 days · forecasted units by product")
+            upcoming_dates = sorted(product_allocation["date"].unique())[:3]
+            mix_window = product_allocation[product_allocation["date"].isin(upcoming_dates)].copy()
+            mix_window["date"] = mix_window["date"].dt.strftime("%Y-%m-%d")
+            st.dataframe(
+                mix_window[["date", "product", "forecast_units", "suggested_qty", "weight"]]
+                .rename(
+                    columns={
+                        "date": "Date",
+                        "product": "Product",
+                        "forecast_units": "Forecast units",
+                        "suggested_qty": "Plan units",
+                        "weight": "Mix weight",
+                    }
+                )
+                .style.format({"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}"}),
+                use_container_width=True,
+                height=280,
+            )
+            plan_payload = product_allocation.rename(columns={"pred_snack_units": "forecast_units"}).copy()
+        plan_payload = plan_payload[["date", "product", "forecast_units"] + ([ "suggested_qty", "weight"] if "suggested_qty" in plan_payload.columns else [])]
+
+    auto_caption = (
+        f"Auto restock ON · floor {restock_policy.get('threshold_units', 40)}u · lot {restock_policy.get('lot_size', 50)}u"
+        if restock_policy.get("auto_enabled")
+        else "Auto restock OFF · configure on the POS Console to automate stock protection."
+    )
+    st.info(
+        f"{auto_caption} · This scenario expects {total_units:.0f} snack units over the next {horizon_hours} hours.",
+        icon="ℹ️",
+    )
+    if 'plan_payload' in locals() and not plan_payload.empty:
+        with st.expander("Procurement actions", expanded=True):
+            st.caption("Push this scenario into the shared procurement plan for downstream tabs.")
+            publish = st.button("Publish scenario to procurement plan", use_container_width=True)
+            if publish:
+                plan_copy = plan_payload.copy()
+                plan_copy["date"] = pd.to_datetime(plan_copy["date"])
+                generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                scenario_metadata = {
+                    "plan_generated_at": generated_at,
+                    "plan_source": "Forecast Explorer",
+                    "plan_weather_pattern": weather_profile,
+                    "plan_horizon_hours": f"{horizon_hours}",
+                    "plan_temp_manual": f"{manual_temp_shift}",
+                    "plan_precip_manual": f"{manual_precip_shift}",
+                    "plan_event_intensity": f"{event_intensity}",
+                    "plan_marketing_boost_pct": f"{marketing_boost_pct}",
+                    "plan_snack_promo": snack_promo,
+                    "plan_snack_price_change_pct": f"{snack_price_change}",
+                }
+                for key, value in scenario_metadata.items():
+                    plan_copy[key] = value
+                save_procurement_plan(plan_copy, metadata=scenario_metadata)
+                st.success("Scenario published to procurement plan (data/procurement_plan.csv).")
 
 # --- Daily trend ----------------------------------------------------------------
 daily = scenario_history.resample("D", on="timestamp").agg({"checkins": "sum", "snack_units": "sum", "snack_revenue": "sum"})
