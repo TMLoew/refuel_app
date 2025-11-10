@@ -14,6 +14,21 @@ import streamlit as st
 def _slugify(label: str) -> str:
     return "".join(ch.lower() if ch.isalnum() else "-" for ch in label)
 
+DEFAULT_WEATHER_SCENARIOS = {
+    "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},
+    "Cold snap": {"temp_offset": -6.0, "precip_multiplier": 1.0, "humidity_offset": 4},
+    "Humid heatwave": {"temp_offset": 5.5, "precip_multiplier": 0.4, "humidity_offset": 8},
+    "Storm front": {"temp_offset": -1.0, "precip_multiplier": 1.8, "humidity_offset": 10},
+}
+
+DEFAULT_RESTOCK_POLICY = {
+    "auto_enabled": False,
+    "threshold_units": 40,
+    "lot_size": 50,
+    "cooldown_hours": 6,
+    "last_auto_restock": None,
+}
+
 try:
     from frontend.streamlit_app.components.layout import (
         render_top_nav,
@@ -21,36 +36,28 @@ try:
         render_footer,
         get_logo_path,
     )
-    from frontend.streamlit_app.services.data_utils import (
-        WEATHER_SCENARIOS,
-        append_pos_log,
-        build_scenario_forecast,
-        load_enriched_data,
-        load_product_mix_data,
-        load_pos_log,
-        load_restock_policy,
-        mark_auto_restock,
-        save_restock_policy,
-        should_auto_restock,
-        get_product_catalog,
-        train_models,
-    )
+    from frontend.streamlit_app.services import data_utils as _du
 except ModuleNotFoundError:  # pragma: no cover
     from components.layout import render_top_nav, sidebar_info_block, render_footer, get_logo_path
-    from services.data_utils import (
-        WEATHER_SCENARIOS,
-        append_pos_log,
-        build_scenario_forecast,
-        load_enriched_data,
-        load_product_mix_data,
-        load_pos_log,
-        load_restock_policy,
-        mark_auto_restock,
-        save_restock_policy,
-        should_auto_restock,
-        get_product_catalog,
-        train_models,
-    )
+    from services import data_utils as _du
+
+
+def _fallback_policy() -> Dict:
+    return DEFAULT_RESTOCK_POLICY.copy()
+
+
+WEATHER_SCENARIOS = getattr(_du, "WEATHER_SCENARIOS", DEFAULT_WEATHER_SCENARIOS)
+append_pos_log = getattr(_du, "append_pos_log")
+build_scenario_forecast = getattr(_du, "build_scenario_forecast", lambda *_args, **_kwargs: pd.DataFrame())
+load_enriched_data = getattr(_du, "load_enriched_data", lambda *_args, **_kwargs: pd.DataFrame())
+load_product_mix_data = getattr(_du, "load_product_mix_data", lambda *_args, **_kwargs: pd.DataFrame())
+load_pos_log = getattr(_du, "load_pos_log", lambda: pd.DataFrame())
+load_restock_policy = getattr(_du, "load_restock_policy", _fallback_policy)
+mark_auto_restock = getattr(_du, "mark_auto_restock", lambda policy: policy)
+save_restock_policy = getattr(_du, "save_restock_policy", lambda *_args, **_kwargs: None)
+should_auto_restock = getattr(_du, "should_auto_restock", lambda *_args, **_kwargs: False)
+get_product_catalog = getattr(_du, "get_product_catalog", lambda *_args, **_kwargs: [])
+train_models = getattr(_du, "train_models", lambda *_args, **_kwargs: (None, None))
 
 PAGE_ICON = get_logo_path() or "🧾"
 st.set_page_config(page_title="POS Console", page_icon=PAGE_ICON, layout="wide")
