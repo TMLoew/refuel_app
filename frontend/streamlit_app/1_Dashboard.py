@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Try absolute import first, but capture the exception so we can display the real cause if it
 # actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
@@ -32,6 +33,7 @@ try:
         save_product_mix_snapshot,
         train_models,
     )
+    from frontend.streamlit_app.services import weather_pipeline
 except (ModuleNotFoundError, ImportError) as _abs_exc:
     # Prepare sys.path so that both `frontend.streamlit_app...` and local `components/services`
     # become importable regardless of whether we are in repo root or app subdir.
@@ -61,11 +63,13 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             SNACK_FEATURES,
             SNACK_PROMOS,
             WEATHER_SCENARIOS,
+            DEFAULT_PRODUCT_PRICE,
             allocate_product_level_forecast,
             build_daily_forecast,
             build_scenario_forecast,
             build_daily_product_mix_view,
             compute_daily_actuals,
+            get_product_price_map,
             load_enriched_data,
             load_product_mix_data,
             load_product_mix_snapshot,
@@ -73,6 +77,7 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             save_product_mix_snapshot,
             train_models,
         )
+        from frontend.streamlit_app.services import weather_pipeline
     except Exception as _retry_abs_exc:
         # Fall back to local package-style imports (components/, services/ under streamlit_app)
         try:
@@ -96,6 +101,7 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
                 save_product_mix_snapshot,
                 train_models,
             )
+            from services import weather_pipeline  # type: ignore
         except Exception as _local_exc:
             # Surface the true root cause to Streamlit UI for fast debugging
             import streamlit as _st
@@ -179,6 +185,29 @@ def render_history_charts(df: pd.DataFrame) -> None:
     col1, col2 = st.columns(2)
     col1.plotly_chart(usage_fig, width="stretch")
     col2.plotly_chart(weather_fig, width="stretch")
+
+
+def render_weather_shotcast() -> None:
+    lat = weather_pipeline.DEFAULT_LAT
+    lon = weather_pipeline.DEFAULT_LON
+    html = f"""
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <div id="weather-map" style="height:320px;border-radius:12px;overflow:hidden;"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+    const map = L.map('weather-map').setView([{lat}, {lon}], 8);
+    L.tileLayer('https://tile.open-meteo.com/v1/clouds_new/{{z}}/{{x}}/{{y}}.png?time=now', {{
+        maxZoom: 12,
+        attribution: '&copy; Open-Meteo'
+    }}).addTo(map);
+    L.tileLayer('https://tile.open-meteo.com/v1/radar/{{z}}/{{x}}/{{y}}.png?time=now&product=precipitation&color=6', {{
+        maxZoom: 12,
+        opacity: 0.8
+    }}).addTo(map);
+    L.circle([{lat}, {lon}], {{radius: 2000, color: '#2E86AB', fillOpacity: 0.15}}).addTo(map);
+    </script>
+    """
+    components.html(html, height=330)
 
 
 def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
@@ -383,6 +412,9 @@ def render_dashboard() -> None:
 
     render_summary_cards(data)
     render_history_charts(data)
+    st.subheader("Weather shotcast")
+    st.caption("Open-Meteo radar/ cloud tiles centered on campus coordinates.")
+    render_weather_shotcast()
 
     if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:
         st.subheader("Product mix snapshot")
