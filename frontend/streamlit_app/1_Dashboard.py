@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import pydeck as pdk
 import streamlit as st
-import streamlit.components.v1 as components
 
 # Try absolute import first, but capture the exception so we can display the real cause if it
 # actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
@@ -190,24 +190,35 @@ def render_history_charts(df: pd.DataFrame) -> None:
 def render_weather_shotcast() -> None:
     lat = weather_pipeline.DEFAULT_LAT
     lon = weather_pipeline.DEFAULT_LON
-    html = f"""
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <div id="weather-map" style="height:320px;border-radius:12px;overflow:hidden;"></div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-    const map = L.map('weather-map').setView([{lat}, {lon}], 8);
-    L.tileLayer('https://tile.open-meteo.com/v1/clouds_new/{{z}}/{{x}}/{{y}}.png?time=now', {{
-        maxZoom: 12,
-        attribution: '&copy; Open-Meteo'
-    }}).addTo(map);
-    L.tileLayer('https://tile.open-meteo.com/v1/radar/{{z}}/{{x}}/{{y}}.png?time=now&product=precipitation&color=6', {{
-        maxZoom: 12,
-        opacity: 0.8
-    }}).addTo(map);
-    L.circle([{lat}, {lon}], {{radius: 2000, color: '#2E86AB', fillOpacity: 0.15}}).addTo(map);
-    </script>
-    """
-    components.html(html, height=330)
+    view_state = pdk.ViewState(latitude=lat, longitude=lon, zoom=8)
+    layers = [
+        pdk.Layer(
+            "TileLayer",
+            data=None,
+            tile_size=256,
+            min_zoom=0,
+            max_zoom=12,
+            get_tile_url="https://tile.open-meteo.com/v1/clouds_new/{z}/{x}/{y}.png?time=now",
+        ),
+        pdk.Layer(
+            "TileLayer",
+            data=None,
+            tile_size=256,
+            min_zoom=0,
+            max_zoom=12,
+            opacity=0.7,
+            get_tile_url="https://tile.open-meteo.com/v1/radar/{z}/{x}/{y}.png?time=now&product=precipitation&color=6",
+        ),
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=pd.DataFrame({"lat": [lat], "lon": [lon]}),
+            get_position=["lon", "lat"],
+            get_radius=3000,
+            get_fill_color=[46, 134, 171, 120],
+        ),
+    ]
+    deck = pdk.Deck(layers=layers, initial_view_state=view_state, map_provider=None, map_style=None)
+    st.pydeck_chart(deck, use_container_width=True, height=330)
 
 
 def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> None:

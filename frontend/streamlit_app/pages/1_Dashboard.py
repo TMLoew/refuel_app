@@ -9,7 +9,9 @@ if str(ROOT_DIR) not in sys.path:
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import pydeck as pdk
 import streamlit as st
+import streamlit.components.v1 as components
 
 from frontend.streamlit_app.components.layout import (
     render_top_nav,
@@ -34,6 +36,7 @@ try:
         load_procurement_plan,
         train_models,
     )
+    from frontend.streamlit_app.services import weather_pipeline
 except ImportError as import_exc:  # fallback for older deployments missing load_procurement_plan
     if "load_procurement_plan" not in str(import_exc):
         raise
@@ -44,6 +47,7 @@ except ImportError as import_exc:  # fallback for older deployments missing load
         load_enriched_data,
         train_models,
     )
+    from frontend.streamlit_app.services import weather_pipeline  # type: ignore
 
     def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
         return pd.DataFrame()
@@ -114,6 +118,40 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
     col1, col2 = st.columns(2)
     col1.plotly_chart(usage_fig, width="stretch")
     col2.plotly_chart(weather_fig, width="stretch")
+
+
+def render_weather_shotcast() -> None:
+    lat = weather_pipeline.DEFAULT_LAT
+    lon = weather_pipeline.DEFAULT_LON
+    view_state = pdk.ViewState(latitude=lat, longitude=lon, zoom=8)
+    layers = [
+        pdk.Layer(
+            "TileLayer",
+            data=None,
+            tile_size=256,
+            min_zoom=0,
+            max_zoom=12,
+            get_tile_url="https://tile.open-meteo.com/v1/clouds_new/{z}/{x}/{y}.png?time=now",
+        ),
+        pdk.Layer(
+            "TileLayer",
+            data=None,
+            tile_size=256,
+            min_zoom=0,
+            max_zoom=12,
+            opacity=0.7,
+            get_tile_url="https://tile.open-meteo.com/v1/radar/{z}/{x}/{y}.png?time=now&product=precipitation&color=6",
+        ),
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=pd.DataFrame({"lat": [lat], "lon": [lon]}),
+            get_position=["lon", "lat"],
+            get_radius=3000,
+            get_fill_color=[46, 134, 171, 120],
+        ),
+    ]
+    deck = pdk.Deck(layers=layers, initial_view_state=view_state, map_provider=None, map_style=None)
+    st.pydeck_chart(deck, use_container_width=True, height=330)
 
 
 def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
@@ -493,6 +531,9 @@ def render_dashboard() -> None:
 
     render_summary_cards(data)
     render_history_charts(data, history_days)
+    st.subheader("Weather shotcast")
+    st.caption("Open-Meteo radar & cloud tiles centered on campus coordinates.")
+    render_weather_shotcast()
 
     forecast_df = build_scenario_forecast(data, models, scenario)
     st.subheader("What-if forecast")
