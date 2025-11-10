@@ -254,23 +254,39 @@ else:
     if 'plan_payload' in locals() and not plan_payload.empty:
         with st.expander("Procurement actions", expanded=True):
             st.caption("Push this scenario into the shared procurement plan for downstream tabs.")
+            generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            last_plan = load_procurement_plan()
+            if not last_plan.empty and "plan_generated_at" in last_plan.columns:
+                last_published = last_plan["plan_generated_at"].iloc[0]
+                st.caption(f"Last published plan · {last_published}")
+            plan_preview = plan_payload.copy()
+            plan_preview["date"] = pd.to_datetime(plan_preview["date"]).dt.strftime("%Y-%m-%d")
+            scenario_metadata = {
+                "plan_generated_at": generated_at,
+                "plan_source": "Forecast Explorer",
+                "plan_weather_pattern": weather_profile,
+                "plan_horizon_hours": f"{horizon_hours}",
+                "plan_temp_manual": f"{manual_temp_shift}",
+                "plan_precip_manual": f"{manual_precip_shift}",
+                "plan_event_intensity": f"{event_intensity}",
+                "plan_marketing_boost_pct": f"{marketing_boost_pct}",
+                "plan_snack_promo": snack_promo,
+                "plan_snack_price_change_pct": f"{snack_price_change}",
+            }
+            for key, value in scenario_metadata.items():
+                plan_preview[key] = value
+            plan_csv = plan_preview.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "⬇️ Download plan CSV",
+                data=plan_csv,
+                file_name="procurement_plan_preview.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
             publish = st.button("Publish scenario to procurement plan", use_container_width=True)
             if publish:
                 plan_copy = plan_payload.copy()
                 plan_copy["date"] = pd.to_datetime(plan_copy["date"])
-                generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                scenario_metadata = {
-                    "plan_generated_at": generated_at,
-                    "plan_source": "Forecast Explorer",
-                    "plan_weather_pattern": weather_profile,
-                    "plan_horizon_hours": f"{horizon_hours}",
-                    "plan_temp_manual": f"{manual_temp_shift}",
-                    "plan_precip_manual": f"{manual_precip_shift}",
-                    "plan_event_intensity": f"{event_intensity}",
-                    "plan_marketing_boost_pct": f"{marketing_boost_pct}",
-                    "plan_snack_promo": snack_promo,
-                    "plan_snack_price_change_pct": f"{snack_price_change}",
-                }
                 for key, value in scenario_metadata.items():
                     plan_copy[key] = value
                 save_procurement_plan(plan_copy, metadata=scenario_metadata)
