@@ -190,6 +190,30 @@ if data.empty:
     st.sidebar.error("No telemetry data available yet. Upload a CSV to explore the cockpit.")
     st.stop()
 
+recent_window = data.tail(24)
+hero_left, hero_right = st.columns([0.65, 0.35])
+with hero_left:
+    st.markdown(
+        "### Weather-aware ops for campus fuel bars  \n"
+        "Use Refuel to blend live weather signals, gym attendance, and merchandising guidance so you can staff, stock, "
+        "and market with confidence."
+    )
+    hero_btn_cols = st.columns(3)
+    if hero_btn_cols[0].button("📊 Open Dashboard", use_container_width=True):
+        st.switch_page("pages/1_Dashboard.py")
+    if hero_btn_cols[1].button("🔮 Run Forecast", use_container_width=True):
+        st.switch_page("pages/2_Forecasts.py")
+    if hero_btn_cols[2].button("🧾 POS Console", use_container_width=True):
+        st.switch_page("pages/7_POS_Console.py")
+with hero_right:
+    st.metric("Next 24h check-ins", f"{recent_window['checkins'].sum():.0f}")
+    st.metric("Next 24h snack units", f"{recent_window['snack_units'].sum():.0f}")
+    st.metric(
+        "Avg snack price",
+        f"€{recent_window['snack_price'].mean():.2f}",
+        help="Weighted mean over the latest 24 hours.",
+    )
+
 daily_summary = (
     data.set_index("timestamp")
     .resample("D")
@@ -213,7 +237,6 @@ with st.sidebar:
         value=min(7, max(3, total_days)),
         key="home-history",
     )
-    metric_focus = st.selectbox("Focus metric", ["checkins", "snack_units", "snack_revenue"], key="home-metric")
     weather_meta = data.attrs.get("weather_meta", {})
     if weather_meta:
         st.caption(
@@ -221,7 +244,17 @@ with st.sidebar:
         )
 
 st.info(
-    "Use the navigation bar to jump into specific tools. The sidebar controls above mirror the default data slice you can apply inside each module."
+    "Use the navigation bar or the call-to-action buttons above to jump into specific tools. "
+    "The sidebar controls mirror the default data slice used inside each module."
+)
+
+st.subheader("How Refuel Works")
+st.markdown(
+    """
+1. **Sync telemetry** – Drop your latest gym+snack CSV into `data/`, then toggle live weather to merge Open-Meteo forecasts.
+2. **Model demand** – Train lightweight regressors that power the Dashboard, Forecast Explorer, and POS alerts.
+3. **Act** – Use scenario sliders to publish procurement plans, adjust SKU prices in the Price Manager, and run the autopilot to keep stock ahead of demand.
+"""
 )
 
 
