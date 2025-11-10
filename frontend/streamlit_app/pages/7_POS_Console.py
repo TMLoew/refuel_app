@@ -129,7 +129,8 @@ with col_form:
     recent_entries = log_df.sort_values("timestamp", ascending=False).head(10).copy()
     for col in ("sales_units", "checkins_recorded", "stock_remaining"):
         if col in recent_entries.columns:
-            recent_entries[col] = recent_entries[col].round().astype("Int64")
+            numeric_series = pd.to_numeric(recent_entries[col], errors="coerce")
+            recent_entries[col] = numeric_series.round().astype("Int64")
     st.dataframe(recent_entries, width="stretch", height=260)
 
 with col_alert:
