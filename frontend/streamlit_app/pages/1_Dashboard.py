@@ -125,8 +125,8 @@ def render_weather_shotcast() -> None:
     lon = weather_pipeline.DEFAULT_LON
     iframe = f"""
     <iframe
-        src="https://www.rainviewer.com/map.html?loc={lat:.3f},{lon:.3f},9,oFa,1,1,0,0,0"
-        style="width:100%; height:330px; border:0; border-radius:12px;"
+        src="https://embed.windy.com/embed2.html?lat={lat:.3f}&lon={lon:.3f}&zoom=8&level=surface&overlay=rainAccu&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&detailLat={lat:.3f}&detailLon={lon:.3f}&metricWind=default&metricTemp=default&radarRange=-1"
+        style="width:100%; height:340px; border:0; border-radius:12px;"
         allowfullscreen
     ></iframe>
     """
