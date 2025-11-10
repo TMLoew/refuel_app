@@ -178,6 +178,41 @@ def fetch_hourly_weather_frame(
     return combined, meta
 
 
+def fetch_future_weather_forecast(
+    start_timestamp: pd.Timestamp,
+    horizon_hours: int,
+    lat: float = DEFAULT_LAT,
+    lon: float = DEFAULT_LON,
+    timezone: str = DEFAULT_TZ,
+) -> pd.DataFrame:
+    """Fetch hourly forecast from Open-Meteo covering the desired future window."""
+    if horizon_hours <= 0:
+        return pd.DataFrame()
+    _ensure_requests()
+    start_ts = pd.to_datetime(start_timestamp)
+    end_ts = start_ts + timedelta(hours=horizon_hours - 1)
+    payload, _ = _request_hourly_weather(
+        start_ts.date().strftime("%Y-%m-%d"),
+        end_ts.date().strftime("%Y-%m-%d"),
+        lat=lat,
+        lon=lon,
+        timezone=timezone,
+    )
+    hourly = payload.get("hourly")
+    if not hourly:
+        return pd.DataFrame()
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.to_datetime(hourly["time"]),
+            "temperature_c": hourly.get("temperature_2m"),
+            "humidity_pct": hourly.get("relative_humidity_2m"),
+            "precipitation_mm": hourly.get("precipitation"),
+        }
+    )
+    mask = (frame["timestamp"] >= start_ts) & (frame["timestamp"] <= end_ts)
+    return frame.loc[mask].reset_index(drop=True)
+
+
 class DataPipeline:
     """
     Merge sales rows with gym rows while injecting temperature and seasonality metadata.

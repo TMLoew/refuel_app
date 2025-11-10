@@ -39,6 +39,7 @@ python backend/app/services/pipeline.py
 - **Snapshots** – Use the “Save snapshot” button in the dashboard’s Product Mix section to persist the merged view (including gaps and implied units) to `data/product_mix_enriched.csv`. Any Streamlit page or external notebook can reload it through `load_product_mix_snapshot()` for reproducible reviews.
 - **POS console + restocks** – `data/pos_runtime_log.csv` now captures each counter entry with optional per-product breakdowns and current shelf stock. Auto-restock preferences live in `data/restock_policy.json` and can be managed from the POS Console.
 - **Procurement autopilot** – Running the autopilot simulation inside `Home.py` or publishing a scenario from the Forecast Explorer writes to `data/procurement_plan.csv`. The file carries `plan_*` metadata columns (weather pattern, promo, horizon, etc.) that downstream tabs surface automatically. Streamlit POS events append to `data/pos_runtime_log.csv`.
+- **Price overrides** – Use the Price Manager page to edit `data/product_prices.csv` so each SKU has its own unit price. Those values feed into the dashboard mix snapshot, scenario allocations, and procurement exports.
 
 ## Forecast Explorer & Scenarios
 

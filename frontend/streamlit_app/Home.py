@@ -570,6 +570,7 @@ with inventory_tab:
                 "marketing_boost_pct": marketing_boost,
                 "snack_price_change": price_change,
                 "snack_promo": promo_choice,
+                "use_live_weather": use_weather_api,
             }
 
             action_cols = st.columns([0.4, 0.3, 0.3])

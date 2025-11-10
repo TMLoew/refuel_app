@@ -18,11 +18,13 @@ try:
         SNACK_FEATURES,
         SNACK_PROMOS,
         WEATHER_SCENARIOS,
+        DEFAULT_PRODUCT_PRICE,
         allocate_product_level_forecast,
         build_daily_forecast,
         build_scenario_forecast,
         build_daily_product_mix_view,
         compute_daily_actuals,
+        get_product_price_map,
         load_enriched_data,
         load_product_mix_data,
         load_product_mix_snapshot,
@@ -80,11 +82,13 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
                 SNACK_FEATURES,
                 SNACK_PROMOS,
                 WEATHER_SCENARIOS,
+                DEFAULT_PRODUCT_PRICE,
                 allocate_product_level_forecast,
                 build_daily_forecast,
                 build_scenario_forecast,
                 build_daily_product_mix_view,
                 compute_daily_actuals,
+                get_product_price_map,
                 load_enriched_data,
                 load_product_mix_data,
                 load_product_mix_snapshot,
@@ -355,6 +359,7 @@ def render_dashboard() -> None:
     with st.spinner("Loading telemetry and contextual data..."):
         data = load_enriched_data(use_weather_api=use_weather_api)
         product_mix_df = load_product_mix_data()
+    price_map = get_product_price_map()
     if data.empty:
         st.error("No gym data found yet. Drop a CSV into `data/gym_badges.csv` to get started.")
         return
@@ -410,6 +415,7 @@ def render_dashboard() -> None:
         "marketing_boost_pct": marketing_boost_pct,
         "snack_price_change": snack_price_change,
         "snack_promo": snack_promo,
+        "use_live_weather": use_weather_api,
     }
     restock_policy = load_restock_policy()
     restock_caption = (
@@ -427,15 +433,10 @@ def render_dashboard() -> None:
         latest_mix_date = product_mix_df["date"].max()
         latest_mix = product_mix_df[product_mix_df["date"] == latest_mix_date].copy()
         latest_mix["weight_pct"] = latest_mix["weight"] * 100
-        mix_cost = st.slider(
-            "Assumed unit cost (€)",
-            min_value=0.5,
-            max_value=10.0,
-            value=3.5,
-            step=0.1,
-            key="mix-cost-dashboard",
+        latest_mix["unit_price"] = (
+            latest_mix["product"].map(price_map).fillna(DEFAULT_PRODUCT_PRICE).round(2)
         )
-        latest_mix["cost_estimate"] = latest_mix["suggested_qty"] * mix_cost
+        latest_mix["cost_estimate"] = latest_mix["suggested_qty"] * latest_mix["unit_price"]
         mix_cols = st.columns(3)
         mix_cols[0].metric("Snapshot date", latest_mix_date.strftime("%Y-%m-%d"))
         mix_cols[1].metric("Visitors plan", f"{int(latest_mix['visitors'].iloc[0]):,}")
@@ -456,17 +457,25 @@ def render_dashboard() -> None:
         mix_fig.update_layout(legend_title_text="Hot day?")
         st.plotly_chart(mix_fig, width="stretch")
         st.dataframe(
-            latest_mix[["product", "suggested_qty", "weight_pct", "cost_estimate", "rainy_day"]]
+            latest_mix[["product", "suggested_qty", "weight_pct", "unit_price", "cost_estimate", "rainy_day"]]
             .rename(
                 columns={
                     "product": "Product",
                     "suggested_qty": "Suggested Qty",
                     "weight_pct": "Mix Share (%)",
+                    "unit_price": "Unit price (€)",
                     "cost_estimate": "Est. Cost (€)",
                     "rainy_day": "Rainy flag",
                 }
             )
-            .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}", "Est. Cost (€)": "€{:.0f}"}),
+            .style.format(
+                {
+                    "Suggested Qty": "{:.0f}",
+                    "Mix Share (%)": "{:.1f}",
+                    "Unit price (€)": "€{:.2f}",
+                    "Est. Cost (€)": "€{:.0f}",
+                }
+            ),
             width="stretch",
             height=260,
         )

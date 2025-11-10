@@ -18,6 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from .weather_pipeline import (
     Ingredient,
     build_synthetic_weather_frame,
+    fetch_future_weather_forecast,
     fetch_hourly_weather_frame,
     month_to_season,
     seasonality,
@@ -33,7 +34,9 @@ PROCUREMENT_PLAN_FILE = PROJECT_ROOT / "data" / "procurement_plan.csv"
 POS_LOG_FILE = PROJECT_ROOT / "data" / "pos_runtime_log.csv"
 PRODUCT_MIX_FILE = PROJECT_ROOT / "data" / "product_mix_daily.csv"
 PRODUCT_MIX_SNAPSHOT_FILE = PROJECT_ROOT / "data" / "product_mix_enriched.csv"
+PRODUCT_PRICE_FILE = PROJECT_ROOT / "data" / "product_prices.csv"
 RESTOCK_POLICY_FILE = PROJECT_ROOT / "data" / "restock_policy.json"
+DEFAULT_PRODUCT_PRICE = 3.5
 DEFAULT_RESTOCK_POLICY: Dict[str, Any] = {
     "auto_enabled": False,
     "threshold_units": 40,
@@ -226,6 +229,7 @@ def build_scenario_forecast(
         return pd.DataFrame()
 
     horizon = scenario["horizon_hours"]
+    use_live_future = bool(scenario.get("use_live_weather", False))
     anchor_ts = history["timestamp"].max()
     if anchor_timestamp is not None:
         anchor_ts = pd.to_datetime(anchor_timestamp)
@@ -247,6 +251,23 @@ def build_scenario_forecast(
 
     for col in ["temperature_c", "precipitation_mm", "humidity_pct", "event_intensity", "snack_price"]:
         future[col] = future[col].fillna(history[col].median())
+
+    if use_live_future:
+        live_weather = pd.DataFrame()
+        try:
+            live_weather = fetch_future_weather_forecast(
+                future_index[0],
+                horizon,
+            )
+        except Exception:
+            live_weather = pd.DataFrame()
+        if not live_weather.empty:
+            future = future.merge(live_weather, on="timestamp", how="left", suffixes=("", "_live"))
+            for col in ["temperature_c", "precipitation_mm", "humidity_pct"]:
+                live_col = f"{col}_live"
+                if live_col in future.columns:
+                    future[col] = future[live_col].combine_first(future[col])
+                    future.drop(columns=[live_col], inplace=True, errors="ignore")
 
     weather_adjust = WEATHER_SCENARIOS[scenario["weather_pattern"]]
     future["temperature_c"] += weather_adjust["temp_offset"] + scenario["temp_manual"]
@@ -321,6 +342,46 @@ def load_product_mix_data(csv_path: Path = PRODUCT_MIX_FILE) -> pd.DataFrame:
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"])
     return df
+
+
+def _default_price_frame() -> pd.DataFrame:
+    mix_df = load_product_mix_data()
+    products = sorted(mix_df["product"].dropna().unique().tolist()) if not mix_df.empty else []
+    if not products:
+        products = ["Protein Shake", "Electrolyte Drink", "Iced Matcha", "Recovery Smoothie", "Isotonic Lemon"]
+    return pd.DataFrame({"product": products, "unit_price": [DEFAULT_PRODUCT_PRICE for _ in products]})
+
+
+def load_product_prices() -> pd.DataFrame:
+    """Load per-product prices (fallback to defaults if file missing)."""
+    if PRODUCT_PRICE_FILE.exists():
+        df = pd.read_csv(PRODUCT_PRICE_FILE)
+    else:
+        df = pd.DataFrame()
+    if df.empty or "product" not in df.columns or "unit_price" not in df.columns:
+        df = _default_price_frame()
+        if not df.empty:
+            PRODUCT_PRICE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(PRODUCT_PRICE_FILE, index=False)
+    df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce")
+    df = df.dropna(subset=["product"]).copy()
+    return df
+
+
+def save_product_prices(prices: pd.DataFrame) -> None:
+    """Persist product pricing overrides."""
+    if prices.empty or "product" not in prices.columns:
+        return
+    export = prices.copy()
+    export = export[["product", "unit_price"]].copy()
+    export["unit_price"] = pd.to_numeric(export["unit_price"], errors="coerce").fillna(DEFAULT_PRODUCT_PRICE)
+    PRODUCT_PRICE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    export.to_csv(PRODUCT_PRICE_FILE, index=False)
+
+
+def get_product_price_map() -> Dict[str, float]:
+    df = load_product_prices()
+    return {row["product"]: float(row["unit_price"]) for _, row in df.iterrows()}
 
 
 def get_product_catalog(product_mix: pd.DataFrame) -> List[str]:
@@ -404,11 +465,36 @@ def allocate_product_level_forecast(
         return pd.DataFrame()
     mix = product_mix.copy()
     mix["date"] = pd.to_datetime(mix["date"]).dt.normalize()
-    merged = mix.merge(daily_forecast[["date", "pred_snack_units"]], on="date", how="inner")
-    if merged.empty or "weight" not in merged.columns:
+    if "weight" not in mix.columns:
         return pd.DataFrame()
-    merged["forecast_units"] = merged["pred_snack_units"] * merged["weight"]
-    return merged
+
+    grouped = {date: group for date, group in mix.groupby("date")}
+    fallback_date = mix["date"].max()
+    if fallback_date is pd.NaT:
+        return pd.DataFrame()
+
+    records = []
+    for _, day_row in daily_forecast.iterrows():
+        date = pd.to_datetime(day_row["date"]).normalize()
+        forecast_units = day_row.get("pred_snack_units")
+        if pd.isna(forecast_units):
+            continue
+        day_mix = grouped.get(date, grouped.get(fallback_date))
+        if day_mix is None or day_mix.empty:
+            continue
+        for _, product_row in day_mix.iterrows():
+            weight = product_row.get("weight", 0.0)
+            if pd.isna(weight):
+                continue
+            entry = {
+                "date": date,
+                "product": product_row.get("product"),
+                "weight": weight,
+                "suggested_qty": product_row.get("suggested_qty"),
+                "forecast_units": forecast_units * weight,
+            }
+            records.append(entry)
+    return pd.DataFrame(records)
 
 
 def save_product_mix_snapshot(snapshot: pd.DataFrame, metadata: Optional[Dict[str, str]] = None) -> None:

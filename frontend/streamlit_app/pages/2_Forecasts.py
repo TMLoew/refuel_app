@@ -22,9 +22,11 @@ from frontend.streamlit_app.services.data_utils import (
     CHECKIN_FEATURES,
     SNACK_PROMOS,
     WEATHER_SCENARIOS,
+    DEFAULT_PRODUCT_PRICE,
     allocate_product_level_forecast,
     build_daily_forecast,
     build_scenario_forecast,
+    get_product_price_map,
     load_enriched_data,
     load_procurement_plan,
     load_product_mix_data,
@@ -122,6 +124,7 @@ if data.empty:
 models = train_models(data)
 product_mix_df = load_product_mix_data()
 restock_policy = load_restock_policy()
+price_map = get_product_price_map()
 
 latest_ts = data["timestamp"].max()
 history = data[data["timestamp"] >= latest_ts - pd.Timedelta(days=lookback_days)]
@@ -155,6 +158,7 @@ scenario_config = {
     "marketing_boost_pct": marketing_boost_pct,
     "snack_price_change": snack_price_change,
     "snack_promo": snack_promo,
+    "use_live_weather": use_weather_api,
 }
 forecast_df = build_scenario_forecast(data, models, scenario_config)
 
@@ -277,13 +281,17 @@ else:
         )
         product_allocation = allocate_product_level_forecast(daily_forecast, product_mix_df)
         plan_payload = daily_forecast.assign(product="All snacks", forecast_units=daily_forecast["pred_snack_units"]).copy()
+        plan_payload["unit_price"] = DEFAULT_PRODUCT_PRICE
         if not product_allocation.empty:
             st.caption("Next 3 days · forecasted units by product")
             upcoming_dates = sorted(product_allocation["date"].unique())[:3]
             mix_window = product_allocation[product_allocation["date"].isin(upcoming_dates)].copy()
             mix_window["date"] = mix_window["date"].dt.strftime("%Y-%m-%d")
+            mix_window["unit_price"] = mix_window["product"].map(price_map).fillna(DEFAULT_PRODUCT_PRICE)
             st.dataframe(
-                mix_window[["date", "product", "forecast_units", "suggested_qty", "weight"]]
+                mix_window[
+                    ["date", "product", "forecast_units", "suggested_qty", "weight", "unit_price"]
+                ]
                 .rename(
                     columns={
                         "date": "Date",
@@ -291,14 +299,32 @@ else:
                         "forecast_units": "Forecast units",
                         "suggested_qty": "Plan units",
                         "weight": "Mix weight",
+                        "unit_price": "Unit price (€)",
                     }
                 )
-                .style.format({"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}"}),
+                .style.format(
+                    {"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}", "Unit price (€)": "€{:.2f}"}
+                ),
                 use_container_width=True,
                 height=280,
             )
-            plan_payload = product_allocation.rename(columns={"pred_snack_units": "forecast_units"}).copy()
-        plan_payload = plan_payload[["date", "product", "forecast_units"] + ([ "suggested_qty", "weight"] if "suggested_qty" in plan_payload.columns else [])]
+            product_allocation["unit_price"] = (
+                product_allocation["product"].map(price_map).fillna(DEFAULT_PRODUCT_PRICE)
+            )
+            plan_payload = (
+                product_allocation.rename(columns={"pred_snack_units": "forecast_units"})
+                if "pred_snack_units" in product_allocation.columns
+                else product_allocation.copy()
+            )
+        else:
+            plan_payload["unit_price"] = DEFAULT_PRODUCT_PRICE
+        columns = ["date", "product", "forecast_units"]
+        if "suggested_qty" in plan_payload.columns:
+            columns.append("suggested_qty")
+        if "weight" in plan_payload.columns:
+            columns.append("weight")
+        columns.append("unit_price")
+        plan_payload = plan_payload[columns]
 
     auto_caption = (
         f"Auto restock ON · floor {restock_policy.get('threshold_units', 40)}u · lot {restock_policy.get('lot_size', 50)}u"

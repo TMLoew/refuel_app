@@ -480,6 +480,7 @@ def render_dashboard() -> None:
         "marketing_boost_pct": marketing_boost_pct,
         "snack_price_change": snack_price_change,
         "snack_promo": snack_promo,
+        "use_live_weather": use_weather_api,
     }
 
     render_summary_cards(data)
