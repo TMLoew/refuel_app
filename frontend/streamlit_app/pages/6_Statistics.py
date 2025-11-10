@@ -219,4 +219,10 @@ hover_tip(
 st.info(
     "Use this page to validate demand hypotheses before configuring scenarios and automation on the other tabs."
 )
+
+st.markdown(
+    """
+**Takeaways** – Warmer, dry days consistently lift check-ins and snack units, while rain erodes demand unless weekend events offset the dip. The regression fits quantify that every extra °C yields a tangible uptick in attendance and snack pull-through, whereas millimeters of precipitation have the opposite effect. When those weather-sensitive forecasts are rolled into the merchandising mix, we can bias procurement toward protein and matcha on hot stretches and pivot to isotonic or smoothie-heavy assortments when storms approach—all while letting the auto restock guardrails ensure shelves stay ahead of the next temperature-driven spike.
+"""
+)
 render_footer()
