@@ -675,7 +675,10 @@ with inventory_tab:
                     auto_df_display["date"] = pd.to_datetime(auto_df_display["date"])
                     metrics_cols = st.columns(3)
                     metrics_cols[0].metric("Simulation days", f"{len(auto_df_display):.0f}")
-                    metrics_cols[1].metric("Plan profit", f"CHF{auto_df_display['profit'].sum():.0f}")
+                    if "profit" in auto_df_display.columns:
+                        metrics_cols[1].metric("Plan profit", f"CHF{auto_df_display['profit'].sum():.0f}")
+                    else:
+                        metrics_cols[1].metric("Plan profit", "n/a")
                     metrics_cols[2].metric("Ending stock", f"{auto_df_display['stock_after'].iloc[-1]:.0f} units")
                     auto_fig = px.line(auto_df_display, x="date", y="stock_after", title="Latest plan trajectory")
                     auto_fig.add_hline(
