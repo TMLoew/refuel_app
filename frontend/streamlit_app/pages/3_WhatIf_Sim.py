@@ -151,7 +151,7 @@ st.subheader("Scenario comparison")
 metric_cols = st.columns(3)
 metric_cols[0].metric(
     "Snack revenue delta",
-    f"€{summary_df.loc[1, 'snack_revenue'] - summary_df.loc[0, 'snack_revenue']:.0f}",
+    f"CHF{summary_df.loc[1, 'snack_revenue'] - summary_df.loc[0, 'snack_revenue']:.0f}",
     f"{(summary_df.loc[1, 'snack_revenue'] / summary_df.loc[0, 'snack_revenue'] - 1)*100:.1f}%",
 )
 metric_cols[1].metric(
@@ -161,7 +161,7 @@ metric_cols[1].metric(
 )
 metric_cols[2].metric(
     "Snack margin proxy delta",
-    f"€{summary_df.loc[1, 'snack_margin_proxy'] - summary_df.loc[0, 'snack_margin_proxy']:.0f}",
+    f"CHF{summary_df.loc[1, 'snack_margin_proxy'] - summary_df.loc[0, 'snack_margin_proxy']:.0f}",
 )
 
 comp_fig = go.Figure()

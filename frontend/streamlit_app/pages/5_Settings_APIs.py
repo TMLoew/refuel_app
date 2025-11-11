@@ -106,7 +106,7 @@ else:
     table_df = plan_df.drop(columns=meta_cols, errors="ignore")
     metrics = st.columns(3)
     if "profit" in plan_df.columns:
-        metrics[0].metric("Projected profit", f"€{plan_df['profit'].sum():.0f}")
+        metrics[0].metric("Projected profit", f"CHF{plan_df['profit'].sum():.0f}")
     if "reordered" in plan_df.columns:
         metrics[1].metric("Reorders planned", int((plan_df["reordered"] == "Yes").sum()))
     if "stock_after" in plan_df.columns:
@@ -118,7 +118,7 @@ else:
             "**Plan assumptions**  \n"
             f"- Weather: **{plan_meta.get('weather_pattern', 'n/a')}** · Promo: **{plan_meta.get('promo', 'n/a')}**  \n"
             f"- Pricing Δ: {plan_meta.get('price_change_pct', '0')}% · Strategy Δ: {plan_meta.get('price_strategy_pct', '0')}%  \n"
-            f"- Unit cost: €{plan_meta.get('unit_cost', 'n/a')} · Fee: €{plan_meta.get('fee', 'n/a')}  \n"
+            f"- Unit cost: CHF{plan_meta.get('unit_cost', 'n/a')} · Fee: CHF{plan_meta.get('fee', 'n/a')}  \n"
             f"- Horizon: {plan_meta.get('horizon_days', '?')} d · Safety stock: {plan_meta.get('safety_stock', '?')} units",
         )
     if {"reordered", "reorder_qty"}.issubset(plan_df.columns):

@@ -58,7 +58,7 @@ edited = st.data_editor(
     use_container_width=True,
     column_config={
         "product": st.column_config.TextColumn("Product", required=True),
-        "unit_price": st.column_config.NumberColumn("Unit price (€)", min_value=0.5, step=0.1),
+        "unit_price": st.column_config.NumberColumn("Unit price (CHF)", min_value=0.5, step=0.1),
     },
     key="price-manager-grid",
 )

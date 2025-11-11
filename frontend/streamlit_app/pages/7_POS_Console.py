@@ -354,7 +354,7 @@ else:
                         "temperature_c": "Temp °C",
                         "pred_checkins": "Check-ins",
                         "pred_snack_units": "Snacks",
-                        "snack_price": "Price (€)",
+                        "snack_price": "Price (CHF)",
                     }
                 ),
                 width="stretch",

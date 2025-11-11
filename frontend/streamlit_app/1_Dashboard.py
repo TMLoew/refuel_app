@@ -134,7 +134,7 @@ def render_summary_cards(df: pd.DataFrame) -> None:
     col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Avg hourly check-ins (24h)", f"{recent['checkins'].mean():.1f}")
     col_b.metric("Snack units sold (24h)", f"{recent['snack_units'].sum():.0f}")
-    col_c.metric("Snack revenue (24h)", f"€{recent['snack_revenue'].sum():.0f}")
+    col_c.metric("Snack revenue (24h)", f"CHF{recent['snack_revenue'].sum():.0f}")
     peak_hour = df.loc[df["checkins"].idxmax()]
     col_d.metric(
         "Peak load",
@@ -288,8 +288,8 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
     )
     kpi_cols[2].metric(
         "Forecast snack revenue",
-        f"€{forecast['pred_snack_revenue'].sum():.0f}",
-        f"avg price €{forecast['snack_price'].mean():.2f}",
+        f"CHF{forecast['pred_snack_revenue'].sum():.0f}",
+        f"avg price CHF{forecast['snack_price'].mean():.2f}",
     )
 
     st.dataframe(
@@ -310,8 +310,8 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
                 "precipitation_mm": "Precip (mm)",
                 "pred_checkins": "Check-ins",
                 "pred_snack_units": "Snack units",
-                "snack_price": "Snack price (€)",
-                "pred_snack_revenue": "Snack revenue (€)",
+                "snack_price": "Snack price (CHF)",
+                "pred_snack_revenue": "Snack revenue (CHF)",
             }
         )
         .set_index("timestamp"),
@@ -436,7 +436,7 @@ def render_dashboard() -> None:
         mix_cols[2].metric(
             "Suggested units",
             f"{latest_mix['suggested_qty'].sum():.0f}",
-            f"Est. cost €{latest_mix['cost_estimate'].sum():.0f}",
+            f"Est. cost CHF{latest_mix['cost_estimate'].sum():.0f}",
         )
         mix_fig = px.bar(
             latest_mix,
@@ -456,8 +456,8 @@ def render_dashboard() -> None:
                     "product": "Product",
                     "suggested_qty": "Suggested Qty",
                     "weight_pct": "Mix Share (%)",
-                    "unit_price": "Unit price (€)",
-                    "cost_estimate": "Est. Cost (€)",
+                    "unit_price": "Unit price (CHF)",
+                    "cost_estimate": "Est. Cost (CHF)",
                     "rainy_day": "Rainy flag",
                 }
             )
@@ -465,8 +465,8 @@ def render_dashboard() -> None:
                 {
                     "Suggested Qty": "{:.0f}",
                     "Mix Share (%)": "{:.1f}",
-                    "Unit price (€)": "€{:.2f}",
-                    "Est. Cost (€)": "€{:.0f}",
+                    "Unit price (CHF)": "CHF{:.2f}",
+                    "Est. Cost (CHF)": "CHF{:.0f}",
                 }
             ),
             width="stretch",

@@ -74,7 +74,7 @@ def render_summary_cards(df: pd.DataFrame) -> None:
     col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Avg hourly check-ins (24h)", f"{recent['checkins'].mean():.1f}")
     col_b.metric("Snack units sold (24h)", f"{recent['snack_units'].sum():.0f}")
-    col_c.metric("Snack revenue (24h)", f"€{recent['snack_revenue'].sum():.0f}")
+    col_c.metric("Snack revenue (24h)", f"CHF{recent['snack_revenue'].sum():.0f}")
     peak_hour = df.loc[df["checkins"].idxmax()]
     col_d.metric(
         "Peak load",
@@ -229,8 +229,8 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
     )
     kpi_cols[2].metric(
         "Forecast snack revenue",
-        f"€{forecast['pred_snack_revenue'].sum():.0f}",
-        f"avg price €{forecast['snack_price'].mean():.2f}",
+        f"CHF{forecast['pred_snack_revenue'].sum():.0f}",
+        f"avg price CHF{forecast['snack_price'].mean():.2f}",
     )
 
     st.dataframe(
@@ -251,8 +251,8 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
                 "precipitation_mm": "Precip (mm)",
                 "pred_checkins": "Check-ins",
                 "pred_snack_units": "Snack units",
-                "snack_price": "Snack price (€)",
-                "pred_snack_revenue": "Snack revenue (€)",
+                "snack_price": "Snack price (CHF)",
+                "pred_snack_revenue": "Snack revenue (CHF)",
             }
         )
         .set_index("timestamp"),
@@ -398,7 +398,7 @@ def render_procurement_panel() -> None:
 
     col_a, col_b = st.columns(2)
     if "profit" in plan_df.columns:
-        col_a.metric("Plan profit outlook", f"€{plan_df['profit'].sum():.0f}")
+        col_a.metric("Plan profit outlook", f"CHF{plan_df['profit'].sum():.0f}")
     if "stock_after" in plan_df.columns:
         col_b.metric("Ending stock", f"{plan_df['stock_after'].iloc[-1]:.0f} units")
 
@@ -409,7 +409,7 @@ def render_procurement_panel() -> None:
             "**Plan assumptions**  \n"
             f"- Weather: **{plan_meta.get('weather_pattern', 'n/a')}** · Promo: **{plan_meta.get('promo', 'n/a')}**  \n"
             f"- Price Δ: {plan_meta.get('price_change_pct', '0')}% · Strategy Δ: {plan_meta.get('price_strategy_pct', '0')}%  \n"
-            f"- Unit cost: €{plan_meta.get('unit_cost', 'n/a')} · Fee: €{plan_meta.get('fee', 'n/a')}  \n"
+            f"- Unit cost: CHF{plan_meta.get('unit_cost', 'n/a')} · Fee: CHF{plan_meta.get('fee', 'n/a')}  \n"
             f"- Horizon: {plan_meta.get('horizon_days', '?')} d · Safety stock: {plan_meta.get('safety_stock', '?')} units",
         )
 

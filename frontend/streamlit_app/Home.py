@@ -165,7 +165,7 @@ def advance_autopilot_block(
     save_autopilot_history_file(autop_history)
     summary = (
         f"Advanced {step_days} day(s). Ending stock {auto_df['stock_after'].iloc[-1]:.0f} units · "
-        f"profit €{auto_df['profit'].sum():.0f}."
+        f"profit CHF{auto_df['profit'].sum():.0f}."
     )
     return autop_history, auto_df, summary, None
 
@@ -210,7 +210,7 @@ with hero_right:
     st.metric("Next 24h snack units", f"{recent_window['snack_units'].sum():.0f}")
     st.metric(
         "Avg snack price",
-        f"€{recent_window['snack_price'].mean():.2f}",
+        f"CHF{recent_window['snack_price'].mean():.2f}",
         help="Weighted mean over the latest 24 hours.",
     )
 
@@ -380,14 +380,14 @@ with pricing_tab:
         elasticity = st.slider("Elasticity factor (negative means demand drops with price)", -3.0, 1.0, -1.2, step=0.1)
         price_range_pct = st.slider("Price adjustment range (%)", 10, 60, 30, step=5)
         promo_boost = st.slider("Promo boost on demand (%)", 0, 100, 15, step=5)
-        preferred_price = st.number_input("Test price (€)", min_value=0.5, max_value=10.0, value=round(avg_price, 2), step=0.1)
+        preferred_price = st.number_input("Test price (CHF)", min_value=0.5, max_value=10.0, value=round(avg_price, 2), step=0.1)
 
     price_points = np.linspace(avg_price * (1 - price_range_pct / 100), avg_price * (1 + price_range_pct / 100), 40)
     demand_curve = avg_units * (price_points / avg_price) ** elasticity * (1 + promo_boost / 100)
     elasticity_fig = px.line(
         x=price_points,
         y=demand_curve,
-        labels={"x": "Price (€)", "y": "Expected snack units"},
+        labels={"x": "Price (CHF)", "y": "Expected snack units"},
         title="Elasticity curve",
     )
     st.plotly_chart(elasticity_fig, width="stretch")
@@ -395,20 +395,20 @@ with pricing_tab:
     st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
 
     st.subheader("Profit maximizer")
-    unit_cost = st.number_input("Unit cost (€)", min_value=0.1, value=round(avg_price * 0.6, 2), step=0.1)
-    operating_fee = st.slider("Per-transaction fee (€)", 0.0, 2.0, 0.2, step=0.1)
+    unit_cost = st.number_input("Unit cost (CHF)", min_value=0.1, value=round(avg_price * 0.6, 2), step=0.1)
+    operating_fee = st.slider("Per-transaction fee (CHF)", 0.0, 2.0, 0.2, step=0.1)
     margin_curve = (price_points - unit_cost - operating_fee) * demand_curve
     optimal_idx = int(np.argmax(margin_curve))
     optimal_price = price_points[optimal_idx]
     optimal_units = demand_curve[optimal_idx]
     optimal_profit = margin_curve[optimal_idx]
     st.write(
-        f"At €{optimal_price:.2f}, expected demand is {optimal_units:.0f} units and projected profit is €{optimal_profit:.0f} / period."
+        f"At CHF{optimal_price:.2f}, expected demand is {optimal_units:.0f} units and projected profit is CHF{optimal_profit:.0f} / period."
     )
     profit_fig = px.line(
         x=price_points,
         y=margin_curve,
-        labels={"x": "Price (€)", "y": "Profit"},
+        labels={"x": "Price (CHF)", "y": "Profit"},
         title="Profit vs. price",
     )
     profit_fig.add_vline(x=optimal_price, line_dash="dash", line_color="green", annotation_text="Optimal")
@@ -430,7 +430,7 @@ with pricing_tab:
         if not mix_slice.empty:
             mix_slice["weight_pct"] = mix_slice["weight"] * 100
             mix_cost = st.slider(
-                "Assumed unit cost (€)",
+                "Assumed unit cost (CHF)",
                 min_value=0.5,
                 max_value=10.0,
                 value=3.5,
@@ -463,12 +463,12 @@ with pricing_tab:
                         "product": "Product",
                         "suggested_qty": "Suggested Qty",
                         "weight_pct": "Mix Share (%)",
-                        "cost_estimate": "Est. Cost (€)",
+                        "cost_estimate": "Est. Cost (CHF)",
                         "hot_day": "Hot?",
                         "rainy_day": "Rainy?",
                     }
                 )
-                .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}", "Est. Cost (€)": "€{:.0f}"}),
+                .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}", "Est. Cost (CHF)": "CHF{:.0f}"}),
                 width="stretch",
                 height=260,
             )
@@ -553,8 +553,8 @@ with inventory_tab:
             safety_auto = max(0.0, lead_time_demand + service_factor * demand_std * np.sqrt(lead_time_auto))
             reorder_qty_auto = safety_auto + lead_time_demand
             starting_auto = reorder_qty_auto * 2
-            auto_unit_cost = st.number_input("Sim unit cost (€)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
-            auto_fee = st.slider("Sim per-transaction fee (€)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
+            auto_unit_cost = st.number_input("Sim unit cost (CHF)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
+            auto_fee = st.slider("Sim per-transaction fee (CHF)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
             st.caption("Autopilot now runs indefinitely: it generates weather, attendance, and snack demand while managing stock.")
 
             scenario_cols = st.columns(3)
@@ -675,7 +675,7 @@ with inventory_tab:
                     auto_df_display["date"] = pd.to_datetime(auto_df_display["date"])
                     metrics_cols = st.columns(3)
                     metrics_cols[0].metric("Simulation days", f"{len(auto_df_display):.0f}")
-                    metrics_cols[1].metric("Plan profit", f"€{auto_df_display['profit'].sum():.0f}")
+                    metrics_cols[1].metric("Plan profit", f"CHF{auto_df_display['profit'].sum():.0f}")
                     metrics_cols[2].metric("Ending stock", f"{auto_df_display['stock_after'].iloc[-1]:.0f} units")
                     auto_fig = px.line(auto_df_display, x="date", y="stock_after", title="Latest plan trajectory")
                     auto_fig.add_hline(
@@ -708,7 +708,7 @@ with inventory_tab:
                 history_view["date"] = pd.to_datetime(history_view["date"])
                 metrics_cols = st.columns(3)
                 metrics_cols[0].metric("Days simulated", f"{len(history_view):.0f}")
-                metrics_cols[1].metric("Total profit", f"€{history_view['profit'].sum():.0f}")
+                metrics_cols[1].metric("Total profit", f"CHF{history_view['profit'].sum():.0f}")
                 metrics_cols[2].metric("Reorders triggered", int((history_view["reordered"] == "Yes").sum()))
 
                 auto_fig = px.line(history_view, x="date", y="stock_after", title="Autopilot stock trajectory (infinite run)")
@@ -765,8 +765,8 @@ dow_fig = px.bar(
 st.plotly_chart(dow_fig, width="stretch")
 st.table(
     dow_stats[["weekday_name", "snack_units", "suggested_price"]]
-    .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (€)"})
-    .style.format({"Avg snack units": "{:.1f}", "Suggested price (€)": "€{:.2f}"})
+    .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (CHF)"})
+    .style.format({"Avg snack units": "{:.1f}", "Suggested price (CHF)": "CHF{:.2f}"})
 )
 
 

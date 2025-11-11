@@ -124,7 +124,7 @@ forecast_df = build_scenario_forecast(data, models, scenario_config)
 
 col_a, col_b, col_c = st.columns(3)
 col_a.metric("Latest check-ins/hr", f"{scenario_history['checkins'].iloc[-1]:.0f}")
-col_b.metric("Snack revenue (24h)", f"€{scenario_history.tail(24)['snack_revenue'].sum():.0f}")
+col_b.metric("Snack revenue (24h)", f"CHF{scenario_history.tail(24)['snack_revenue'].sum():.0f}")
 col_c.metric("Weather source", data.attrs.get("weather_source", "synthetic").title())
 st.divider()
 
@@ -233,7 +233,7 @@ else:
                     "date": "Date",
                     "pred_checkins": "Forecast check-ins",
                     "pred_snack_units": "Forecast snacks",
-                    "pred_snack_revenue": "Forecast revenue (€)",
+                    "pred_snack_revenue": "Forecast revenue (CHF)",
                 }
             ),
             use_container_width=True,
@@ -259,11 +259,11 @@ else:
                         "forecast_units": "Forecast units",
                         "suggested_qty": "Plan units",
                         "weight": "Mix weight",
-                        "unit_price": "Unit price (€)",
+                        "unit_price": "Unit price (CHF)",
                     }
                 )
                 .style.format(
-                    {"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}", "Unit price (€)": "€{:.2f}"}
+                    {"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}", "Unit price (CHF)": "CHF{:.2f}"}
                 ),
                 use_container_width=True,
                 height=280,
