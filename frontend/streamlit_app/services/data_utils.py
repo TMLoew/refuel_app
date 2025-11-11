@@ -485,6 +485,34 @@ def get_product_price_map() -> Dict[str, float]:
     return {row["product"]: float(row["unit_price"]) for _, row in df.iterrows()}
 
 
+def add_or_update_product_price(product: str, unit_price: float = DEFAULT_PRODUCT_PRICE) -> None:
+    """Add a new product to the price sheet, or update if it already exists."""
+    product = product.strip()
+    if not product:
+        return
+    prices = load_product_prices()
+    if prices.empty:
+        updated = pd.DataFrame({"product": [product], "unit_price": [unit_price]})
+    else:
+        prices = prices.copy()
+        if product in prices["product"].values:
+            prices.loc[prices["product"] == product, "unit_price"] = unit_price
+            updated = prices
+        else:
+            new_row = pd.DataFrame({"product": [product], "unit_price": [unit_price]})
+            updated = pd.concat([prices, new_row], ignore_index=True)
+    save_product_prices(updated)
+
+
+def remove_product_price(product: str) -> None:
+    """Remove a product from the price sheet."""
+    prices = load_product_prices()
+    if prices.empty or product not in prices["product"].values:
+        return
+    updated = prices[prices["product"] != product].reset_index(drop=True)
+    save_product_prices(updated)
+
+
 def load_weather_profile() -> Dict[str, Any]:
     if WEATHER_PROFILE_FILE.exists():
         try:

@@ -16,8 +16,10 @@ from frontend.streamlit_app.components.layout import (
 )
 from frontend.streamlit_app.services.data_utils import (
     DEFAULT_PRODUCT_PRICE,
+    add_or_update_product_price,
     load_product_mix_data,
     load_product_prices,
+    remove_product_price,
     save_product_prices,
 )
 
@@ -71,7 +73,37 @@ if col_save.button("Save prices", use_container_width=True):
 if col_reset.button("Reset to defaults", use_container_width=True):
     defaults = pd.DataFrame({"product": known_products, "unit_price": [DEFAULT_PRODUCT_PRICE] * len(known_products)})
     save_product_prices(defaults)
-    st.experimental_rerun()
+    st.rerun()
+
+st.subheader("Add or remove products")
+add_col, remove_col = st.columns(2)
+with add_col:
+    new_name = st.text_input("New product name", key="price-add-name")
+    new_price = st.number_input(
+        "Unit price (CHF)",
+        min_value=0.5,
+        max_value=50.0,
+        value=DEFAULT_PRODUCT_PRICE,
+        step=0.1,
+        key="price-add-value",
+    )
+    if st.button("Add / update product", key="price-add-btn", use_container_width=True):
+        if new_name.strip():
+            add_or_update_product_price(new_name, new_price)
+            st.success(f"{new_name} saved.")
+            st.rerun()
+        else:
+            st.warning("Enter a product name before saving.")
+
+with remove_col:
+    if known_products:
+        remove_choice = st.selectbox("Pick product to remove", known_products, key="price-remove-choice")
+        if st.button("Remove product", key="price-remove-btn", use_container_width=True):
+            remove_product_price(remove_choice)
+            st.warning(f"{remove_choice} removed from the price sheet.")
+            st.rerun()
+    else:
+        st.info("No products available to remove.")
 
 st.subheader("Current file snapshot")
 st.dataframe(load_product_prices(), use_container_width=True, height=280)
