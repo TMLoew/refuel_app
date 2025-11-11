@@ -1,3 +1,0 @@
-pip install scikit-learn joblib pandas
-pip install pytrends
-python backend/app/ml/train_demand_model.py
