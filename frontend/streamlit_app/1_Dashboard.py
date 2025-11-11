@@ -17,7 +17,6 @@ try:
     from frontend.streamlit_app.services.data_utils import (
         CHECKIN_FEATURES,
         SNACK_FEATURES,
-        SNACK_PROMOS,
         WEATHER_SCENARIOS,
         DEFAULT_PRODUCT_PRICE,
         allocate_product_level_forecast,
@@ -62,7 +61,6 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
         from frontend.streamlit_app.services.data_utils import (
             CHECKIN_FEATURES,
             SNACK_FEATURES,
-            SNACK_PROMOS,
             WEATHER_SCENARIOS,
             DEFAULT_PRODUCT_PRICE,
             allocate_product_level_forecast,
@@ -86,7 +84,6 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             from services.data_utils import (
                 CHECKIN_FEATURES,
                 SNACK_FEATURES,
-                SNACK_PROMOS,
                 WEATHER_SCENARIOS,
                 DEFAULT_PRODUCT_PRICE,
                 allocate_product_level_forecast,
@@ -379,7 +376,6 @@ def render_dashboard() -> None:
                 value=0,
                 step=5,
             )
-            snack_promo = st.selectbox("Snack activation", list(SNACK_PROMOS.keys()))
 
     scenario = {
         "horizon_hours": horizon_hours,
@@ -389,7 +385,6 @@ def render_dashboard() -> None:
         "event_intensity": event_intensity,
         "marketing_boost_pct": marketing_boost_pct,
         "snack_price_change": snack_price_change,
-        "snack_promo": snack_promo,
         "use_live_weather": use_weather_api,
     }
     restock_policy = load_restock_policy()
@@ -597,7 +592,7 @@ def render_dashboard() -> None:
     st.subheader("What-if forecast")
     hover_tip(
         "ℹ️ Forecast math",
-        "Predictions come from two linear regressions: check-ins = β·features, snacks = γ·features (including weather shifts, events, and promo multipliers). Sliders alter the feature inputs before inference.",
+        "Predictions come from two linear regressions: check-ins = β·features, snacks = γ·features (including weather shifts and events). Sliders alter the feature inputs before inference.",
     )
     render_forecast_section(data, forecast_df)
 

@@ -30,7 +30,6 @@ except ModuleNotFoundError:
     import services.data_utils as data_utils_mod
 
 WEATHER_SCENARIOS = data_utils_mod.WEATHER_SCENARIOS
-SNACK_PROMOS = data_utils_mod.SNACK_PROMOS
 build_scenario_forecast = data_utils_mod.build_scenario_forecast
 load_enriched_data = data_utils_mod.load_enriched_data
 train_models = data_utils_mod.train_models
@@ -141,7 +140,6 @@ def advance_autopilot_block(
     scenario_metadata = {
         "plan_weather_pattern": scenario["weather_pattern"],
         "plan_marketing_boost_pct": f"{scenario.get('marketing_boost_pct', 0)}",
-        "plan_promo": scenario["snack_promo"],
         "plan_price_change_pct": f"{scenario.get('snack_price_change', 0)}",
         "plan_price_strategy_pct": f"{price_strategy_pct}",
         "plan_unit_cost": f"{auto_unit_cost:.2f}",
@@ -379,11 +377,10 @@ with pricing_tab:
     with col_left:
         elasticity = st.slider("Elasticity factor (negative means demand drops with price)", -3.0, 1.0, -1.2, step=0.1)
         price_range_pct = st.slider("Price adjustment range (%)", 10, 60, 30, step=5)
-        promo_boost = st.slider("Promo boost on demand (%)", 0, 100, 15, step=5)
         preferred_price = st.number_input("Test price (CHF)", min_value=0.5, max_value=10.0, value=round(avg_price, 2), step=0.1)
 
     price_points = np.linspace(avg_price * (1 - price_range_pct / 100), avg_price * (1 + price_range_pct / 100), 40)
-    demand_curve = avg_units * (price_points / avg_price) ** elasticity * (1 + promo_boost / 100)
+    demand_curve = avg_units * (price_points / avg_price) ** elasticity
     elasticity_fig = px.line(
         x=price_points,
         y=demand_curve,
@@ -391,7 +388,7 @@ with pricing_tab:
         title="Elasticity curve",
     )
     st.plotly_chart(elasticity_fig, width="stretch")
-    expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity * (1 + promo_boost / 100)
+    expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity
     st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
 
     st.subheader("Profit maximizer")
@@ -557,10 +554,9 @@ with inventory_tab:
             auto_fee = st.slider("Sim per-transaction fee (CHF)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
             st.caption("Autopilot now runs indefinitely: it generates weather, attendance, and snack demand while managing stock.")
 
-            scenario_cols = st.columns(3)
+            scenario_cols = st.columns(2)
             weather_pattern = scenario_cols[0].selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()), key="auto-weather")
             marketing_boost = scenario_cols[1].slider("Marketing boost (%)", 0, 80, 10, key="auto-marketing")
-            promo_choice = scenario_cols[2].selectbox("Promo tactic", list(SNACK_PROMOS.keys()), key="auto-promo")
 
             manual_cols = st.columns(3)
             temp_manual = manual_cols[0].slider("Manual temp shift (°C)", -8, 8, 0, key="auto-temp")
@@ -602,7 +598,6 @@ with inventory_tab:
                 "event_intensity": event_intensity,
                 "marketing_boost_pct": marketing_boost,
                 "snack_price_change": price_change,
-                "snack_promo": promo_choice,
                 "use_live_weather": use_weather_api,
             }
 

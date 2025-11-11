@@ -317,7 +317,6 @@ else:
         "event_intensity": 1.0,
         "marketing_boost_pct": 0,
         "snack_price_change": 0,
-        "snack_promo": "Baseline offer",
         "use_live_weather": use_weather_api,
     }
     forecast = build_scenario_forecast(base_data, models, scenario)

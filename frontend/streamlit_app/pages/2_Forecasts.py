@@ -29,7 +29,6 @@ except ImportError:
             st.caption(f"{label}: {tooltip}")
 from frontend.streamlit_app.services.data_utils import (
     CHECKIN_FEATURES,
-    SNACK_PROMOS,
     WEATHER_SCENARIOS,
     DEFAULT_PRODUCT_PRICE,
     allocate_product_level_forecast,
@@ -65,7 +64,6 @@ with st.sidebar:
         event_intensity = st.slider("Event intensity", 0.2, 2.5, 1.0, 0.1, key="forecast-event")
         marketing_boost_pct = st.slider("Marketing boost (%)", 0, 80, 10, 5, key="forecast-marketing")
         snack_price_change = st.slider("Snack price change (%)", -30, 40, 0, 5, key="forecast-price")
-        snack_promo = st.selectbox("Snack activation", list(SNACK_PROMOS.keys()), index=0, key="forecast-promo")
     with st.expander("Snacks ↔ visits settings", expanded=False):
         snack_agg_mode = st.radio("Aggregation", ["Hourly", "Daily"], horizontal=True, key="snack-agg")
         color_dim = st.selectbox(
@@ -117,7 +115,6 @@ scenario_config = {
     "event_intensity": event_intensity,
     "marketing_boost_pct": marketing_boost_pct,
     "snack_price_change": snack_price_change,
-    "snack_promo": snack_promo,
     "use_live_weather": use_weather_api,
 }
 forecast_df = build_scenario_forecast(data, models, scenario_config)
@@ -300,7 +297,7 @@ else:
             st.caption("Push this scenario into the shared procurement plan for downstream tabs.")
             hover_tip(
                 "ℹ️ Plan math",
-                "The exported CSV includes daily forecast units plus the scenario metadata (weather, promo, price shifts) so downstream tabs can reproduce the assumptions.",
+                "The exported CSV includes daily forecast units plus the scenario metadata (weather and price shifts) so downstream tabs can reproduce the assumptions.",
             )
             generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             last_plan = load_procurement_plan()
@@ -318,7 +315,6 @@ else:
                 "plan_precip_manual": f"{manual_precip_shift}",
                 "plan_event_intensity": f"{event_intensity}",
                 "plan_marketing_boost_pct": f"{marketing_boost_pct}",
-                "plan_snack_promo": snack_promo,
                 "plan_snack_price_change_pct": f"{snack_price_change}",
             }
             for key, value in scenario_metadata.items():

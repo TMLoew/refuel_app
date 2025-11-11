@@ -16,7 +16,6 @@ from frontend.streamlit_app.components.layout import (
     get_logo_path,
 )
 from frontend.streamlit_app.services.data_utils import (
-    SNACK_PROMOS,
     WEATHER_SCENARIOS,
     build_scenario_forecast,
     load_enriched_data,
@@ -49,7 +48,6 @@ default_scenario = {
     "event_intensity": 1.0,
     "marketing_boost_pct": 10,
     "snack_price_change": 0,
-    "snack_promo": "Baseline offer",
 }
 
 
@@ -97,12 +95,6 @@ def scenario_form(label: str, defaults: dict):
                 step=5,
                 key=f"{label}-price",
             )
-            snack_promo = st.selectbox(
-                "Snack activation",
-                list(SNACK_PROMOS.keys()),
-                index=list(SNACK_PROMOS.keys()).index(defaults["snack_promo"]),
-                key=f"{label}-promo",
-            )
             horizon_hours = st.slider(
                 "Forecast horizon (hours)",
                 6,
@@ -119,7 +111,6 @@ def scenario_form(label: str, defaults: dict):
         "event_intensity": event_intensity,
         "marketing_boost_pct": marketing_boost_pct,
         "snack_price_change": snack_price_change,
-        "snack_promo": snack_promo,
         "use_live_weather": use_weather_api,
     }
 
@@ -127,7 +118,7 @@ def scenario_form(label: str, defaults: dict):
 scenario_a = scenario_form("Scenario A · Baseline", default_scenario)
 scenario_b = scenario_form(
     "Scenario B · Experimental",
-    {**default_scenario, "marketing_boost_pct": 30, "snack_promo": "Buy-one-get-one", "horizon_hours": 36},
+    {**default_scenario, "marketing_boost_pct": 30, "horizon_hours": 36},
 )
 
 forecast_a = build_scenario_forecast(data, models, scenario_a)

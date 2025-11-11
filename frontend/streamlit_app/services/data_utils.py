@@ -58,13 +58,6 @@ WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Storm front": {"temp_offset": -1.0, "precip_multiplier": 1.8, "humidity_offset": 10},
 }
 
-SNACK_PROMOS: Dict[str, Dict[str, float]] = {
-    "Baseline offer": {"demand_boost": 0.0, "price_delta": 0.0},
-    "Protein sampler": {"demand_boost": 0.12, "price_delta": 0.05},
-    "Buy-one-get-one": {"demand_boost": 0.28, "price_delta": -0.18},
-    "Corporate snack box": {"demand_boost": 0.18, "price_delta": 0.1},
-}
-
 CHECKIN_FEATURES = [
     "hour",
     "is_weekend",
@@ -382,9 +375,8 @@ def build_scenario_forecast(
     )
     future["event_intensity"] = scenario["event_intensity"]
 
-    promo = SNACK_PROMOS[scenario["snack_promo"]]
     future["snack_price"] = np.clip(
-        future["snack_price"] * (1 + scenario["snack_price_change"] / 100) * (1 + promo["price_delta"]),
+        future["snack_price"] * (1 + scenario["snack_price_change"] / 100),
         1.5,
         None,
     )
@@ -399,7 +391,7 @@ def build_scenario_forecast(
 
     future_features["checkins"] = future["pred_checkins"]
     future["pred_snack_units"] = np.clip(
-        snack_model.predict(future_features[SNACK_FEATURES]) * (1 + promo["demand_boost"]),
+        snack_model.predict(future_features[SNACK_FEATURES]),
         0,
         None,
     )
