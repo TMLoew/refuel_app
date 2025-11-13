@@ -191,9 +191,6 @@ if data.empty:
 recent_window = data.tail(24)
 hero_left, hero_right = st.columns([0.65, 0.35])
 with hero_left:
-    st.markdown(
-        "### Forecast and manage sales (including stocking) of snacks at your gym  \n"
-    )
     hero_btn_cols = st.columns(3)
     if hero_btn_cols[0].button("📊 Open Dashboard", use_container_width=True):
         st.switch_page("pages/1_Dashboard.py")
