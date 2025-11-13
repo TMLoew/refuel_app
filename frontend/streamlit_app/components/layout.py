@@ -110,7 +110,7 @@ def sidebar_info_block() -> None:
 
 def render_footer() -> None:
     st.markdown("---")
-    st.markdown("University of St. Gallen (HSG) · Tristan · Alice · Benjamin · Marie · Solal")
+    st.markdown("University of St. Gallen (HSG) · Alice · Marie · Benjamin · Solal · Tristan")
 
 
 def _ensure_tooltip_css() -> None:
