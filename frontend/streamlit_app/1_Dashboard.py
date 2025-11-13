@@ -142,24 +142,35 @@ def render_summary_cards(df: pd.DataFrame) -> None:
 
 def render_history_charts(df: pd.DataFrame) -> None:
     history_window = df[df["timestamp"] >= df["timestamp"].max() - pd.Timedelta(days=5)]
+    resampled = (
+        history_window.set_index("timestamp")
+        .resample("60min")
+        .mean()
+        .dropna(subset=["checkins", "snack_units"])
+        .reset_index()
+    )
     usage_fig = go.Figure()
     usage_fig.add_trace(
         go.Scatter(
-            x=history_window["timestamp"],
-            y=history_window["checkins"],
+            x=resampled["timestamp"],
+            y=resampled["checkins"],
             mode="lines",
             name="Check-ins",
-            line=dict(color="#2E86AB"),
+            line=dict(color="#2E86AB", width=1),
+            fill="tozeroy",
+            fillcolor="rgba(46,134,171,0.25)",
+            hovertemplate="Check-ins: %{y:.0f}<br>%{x|%a %H:%M}",
         )
     )
     usage_fig.add_trace(
         go.Scatter(
-            x=history_window["timestamp"],
-            y=history_window["snack_units"],
+            x=resampled["timestamp"],
+            y=resampled["snack_units"],
             mode="lines",
             name="Snack units",
             yaxis="y2",
-            line=dict(color="#F18F01"),
+            line=dict(color="#F18F01", width=2, shape="spline"),
+            hovertemplate="Snack units: %{y:.0f}<br>%{x|%a %H:%M}",
         )
     )
     usage_fig.update_layout(
@@ -169,6 +180,7 @@ def render_history_charts(df: pd.DataFrame) -> None:
         yaxis2=dict(title="Snack units", overlaying="y", side="right"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=380,
+        margin=dict(t=60, b=10, l=60, r=60),
     )
 
     weather_fig = px.line(
