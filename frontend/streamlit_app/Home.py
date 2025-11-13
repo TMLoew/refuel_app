@@ -96,7 +96,6 @@ def advance_autopilot_block(
     reorder_qty: float,
     auto_unit_cost: float,
     auto_fee: float,
-    elasticity: float,
     price_strategy_pct: float,
     sales_boost_pct: float,
     step_days: int,
@@ -123,7 +122,6 @@ def advance_autopilot_block(
         reorder_qty=reorder_qty,
         unit_cost=auto_unit_cost,
         fee=auto_fee,
-        elasticity=elasticity,
         price_strategy_pct=price_strategy_pct,
         scenario_label=scenario["weather_pattern"],
     )
@@ -258,7 +256,6 @@ def run_auto_simulation(
     reorder_qty: float,
     unit_cost: float,
     fee: float,
-    elasticity: float,
     price_strategy_pct: float,
     scenario_label: str,
 ) -> pd.DataFrame:
@@ -294,7 +291,7 @@ def run_auto_simulation(
         target_price = float(
             np.clip(row["snack_price"] * temp_bias * (1 + price_strategy_pct / 100), price_min, price_max)
         )
-        demand_adj = max(0.0, row["demand"] * (target_price / max(base_price, 0.01)) ** elasticity)
+        demand_adj = max(0.0, row["demand"])
         stock_before = stock
         sold = min(stock_before, demand_adj)
         stock_after = stock_before - sold
@@ -361,54 +358,11 @@ def run_historic_replay(
     return pd.DataFrame(rows)
 
 
-pricing_tab, inventory_tab = st.tabs(["Pricing & Elasticity", "Inventory Planner"])
+inventory_tab = st.container()
 
-with pricing_tab:
-    st.subheader("Snack Pricing & Elasticity Sandbox")
-
-    avg_price = float(data["snack_price"].mean())
-    avg_units = float(data["snack_units"].mean())
-    col_left, col_right = st.columns(2)
-    with col_left:
-        elasticity = st.slider("Elasticity factor (negative means demand drops with price)", -3.0, 1.0, -1.2, step=0.1)
-        price_range_pct = st.slider("Price adjustment range (%)", 10, 60, 30, step=5)
-        preferred_price = st.number_input("Test price (CHF)", min_value=0.5, max_value=10.0, value=round(avg_price, 2), step=0.1)
-
-    price_points = np.linspace(avg_price * (1 - price_range_pct / 100), avg_price * (1 + price_range_pct / 100), 40)
-    demand_curve = avg_units * (price_points / avg_price) ** elasticity
-    elasticity_fig = px.line(
-        x=price_points,
-        y=demand_curve,
-        labels={"x": "Price (CHF)", "y": "Expected snack units"},
-        title="Elasticity curve",
-    )
-    st.plotly_chart(elasticity_fig, use_container_width=True)
-    expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity
-    st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
-
-    st.subheader("Profit maximizer")
-    unit_cost = st.number_input("Unit cost (CHF)", min_value=0.1, value=round(avg_price * 0.6, 2), step=0.1)
-    operating_fee = st.slider("Per-transaction fee (CHF)", 0.0, 2.0, 0.2, step=0.1)
-    margin_curve = (price_points - unit_cost - operating_fee) * demand_curve
-    optimal_idx = int(np.argmax(margin_curve))
-    optimal_price = price_points[optimal_idx]
-    optimal_units = demand_curve[optimal_idx]
-    optimal_profit = margin_curve[optimal_idx]
-    st.write(
-        f"At CHF{optimal_price:.2f}, expected demand is {optimal_units:.0f} units and projected profit is CHF{optimal_profit:.0f} / period."
-    )
-    profit_fig = px.line(
-        x=price_points,
-        y=margin_curve,
-        labels={"x": "Price (CHF)", "y": "Profit"},
-        title="Profit vs. price",
-    )
-    profit_fig.add_vline(x=optimal_price, line_dash="dash", line_color="green", annotation_text="Optimal")
-    profit_fig.add_vline(x=preferred_price, line_dash="dot", line_color="blue", annotation_text="Test price")
-    st.plotly_chart(profit_fig, use_container_width=True)
-
+with inventory_tab:
+    st.subheader("Product mix outlook")
     if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:
-        st.subheader("Product mix outlook")
         mix_dates = sorted(product_mix_df["date"].dt.date.unique())
         default_mix_date = mix_dates[-1]
         selected_mix_date = st.select_slider(
@@ -469,10 +423,12 @@ with pricing_tab:
     else:
         st.info("Product mix file not found yet. Drop `data/product_mix_daily.csv` to unlock mix insights.")
 
-with inventory_tab:
+    st.subheader("Inventory & Autopilot")
     sim_mode = st.selectbox("Simulation mode", ["Manual Planner", "Historic Replay", "Weather-aware Autopilot"])
     avg_price = float(data["snack_price"].mean())
     avg_units = float(data["snack_units"].mean())
+    unit_cost_default = round(avg_price * 0.6, 2)
+    operating_fee_default = 0.2
 
     if sim_mode == "Manual Planner":
         st.subheader("Manual planner")
@@ -545,8 +501,12 @@ with inventory_tab:
             safety_auto = max(0.0, lead_time_demand + service_factor * demand_std * np.sqrt(lead_time_auto))
             reorder_qty_auto = safety_auto + lead_time_demand
             starting_auto = reorder_qty_auto * 2
-            auto_unit_cost = st.number_input("Sim unit cost (CHF)", min_value=0.1, value=unit_cost, step=0.1, key="auto-unit-cost")
-            auto_fee = st.slider("Sim per-transaction fee (CHF)", 0.0, 2.0, operating_fee, step=0.1, key="auto-fee")
+            auto_unit_cost = st.number_input(
+                "Sim unit cost (CHF)", min_value=0.1, value=unit_cost_default, step=0.1, key="auto-unit-cost"
+            )
+            auto_fee = st.slider(
+                "Sim per-transaction fee (CHF)", 0.0, 2.0, operating_fee_default, step=0.1, key="auto-fee"
+            )
             st.caption("Autopilot now runs indefinitely: it generates weather, attendance, and snack demand while managing stock.")
 
             scenario_cols = st.columns(2)
@@ -635,7 +595,6 @@ with inventory_tab:
                     reorder_qty=reorder_qty_auto,
                     auto_unit_cost=auto_unit_cost,
                     auto_fee=auto_fee,
-                    elasticity=elasticity,
                     price_strategy_pct=price_strategy,
                     sales_boost_pct=sales_boost_pct,
                     step_days=auto_step_days,
