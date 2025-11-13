@@ -53,7 +53,7 @@ st.caption("Dig into the regression models, understand residuals, and inspect se
 with st.sidebar:
     sidebar_info_block()
     st.subheader("Data slice")
-    use_weather_api = st.toggle("Use live weather API", value=False, key="forecast-weather")
+    use_weather_api = st.toggle("Use live weather API", value=True, key="forecast-weather")
     lookback_days = st.slider("History window (days)", 3, 14, 7)
     metric_focus = st.selectbox("Focus metric", ["checkins", "snack_units", "snack_revenue"])
     weather_profile = st.selectbox("Weather scenario override", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
@@ -367,8 +367,8 @@ heatmap_fig = go.Figure(
 heatmap_fig.update_layout(title="Hourly utilization pattern")
 
 col1, col2 = st.columns(2)
-col1.plotly_chart(trend_fig, width="stretch")
-col2.plotly_chart(heatmap_fig, width="stretch")
+col1.plotly_chart(trend_fig, use_container_width=True)
+col2.plotly_chart(heatmap_fig, use_container_width=True)
 
 # --- Correlation matrix --------------------------------------------------------
 corr_fields = ["checkins", "snack_units", "temperature_c", "precipitation_mm", "humidity_pct"]
@@ -380,7 +380,7 @@ corr_fig = px.imshow(
     color_continuous_scale="RdBu",
     title="Correlation matrix: weather vs. demand",
 )
-st.plotly_chart(corr_fig, width="stretch")
+st.plotly_chart(corr_fig, use_container_width=True)
 
 # --- Snack vs visit correlation explorer ---------------------------------------
 if snack_agg_mode == "Daily":
@@ -409,7 +409,7 @@ if not snack_df.empty:
         title="Snacks vs. visits",
         hover_data=["temperature_c"],
     )
-    st.plotly_chart(scatter_fig, width="stretch")
+    st.plotly_chart(scatter_fig, use_container_width=True)
 
 # --- Feature sensitivity --------------------------------------------------------
 checkin_model, snack_model = models
@@ -436,7 +436,7 @@ if checkin_model is not None:
             title="Model feature influence",
         )
         impact_fig.update_layout(coloraxis_showscale=False)
-        st.plotly_chart(impact_fig, width="stretch")
+        st.plotly_chart(impact_fig, use_container_width=True)
 
 # --- Residual diagnostics -------------------------------------------------------
 if checkin_model is not None:
@@ -453,8 +453,8 @@ if checkin_model is not None:
         trendline="ols",
         labels={"residuals_checkins": "Residual (actual - predicted)"},
     )
-    st.plotly_chart(residual_fig, width="stretch")
+    st.plotly_chart(residual_fig, use_container_width=True)
 
 st.subheader("Raw data peek")
-st.dataframe(scenario_history.tail(200).set_index("timestamp"), width="stretch", height=360)
+st.dataframe(scenario_history.tail(200).set_index("timestamp"), use_container_width=True, height=360)
 render_footer()

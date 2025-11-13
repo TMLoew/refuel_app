@@ -122,8 +122,8 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
     weather_fig.update_layout(height=380, legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
     col1, col2 = st.columns(2)
-    col1.plotly_chart(usage_fig, width="stretch")
-    col2.plotly_chart(weather_fig, width="stretch")
+    col1.plotly_chart(usage_fig, use_container_width=True)
+    col2.plotly_chart(weather_fig, use_container_width=True)
 
 
 def render_weather_shotcast() -> None:
@@ -212,7 +212,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             )
         ],
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     kpi_cols = st.columns(3)
     kpi_cols[0].metric(
@@ -254,7 +254,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             }
         )
         .set_index("timestamp"),
-        width="stretch",
+        use_container_width=True,
     )
 
 
@@ -376,7 +376,7 @@ def render_inventory_game(df: pd.DataFrame) -> None:
             annotation_text=f"Threshold ({low_threshold:.0f})",
             annotation_position="bottom right",
         )
-        st.plotly_chart(stock_fig, width="stretch")
+        st.plotly_chart(stock_fig, use_container_width=True)
 
 
 def render_procurement_panel() -> None:
@@ -423,7 +423,7 @@ def render_procurement_panel() -> None:
         if {"scenario", "reorder_qty"}.issubset(table_df.columns)
         else list(table_df.columns)
     )
-    st.dataframe(table_df.head(30)[columns_to_show], width="stretch", height=320)
+    st.dataframe(table_df.head(30)[columns_to_show], use_container_width=True, height=320)
 
 
 def render_dashboard() -> None:
@@ -436,8 +436,8 @@ def render_dashboard() -> None:
     with st.sidebar:
         sidebar_info_block()
         st.subheader("Scenario controls")
-        use_weather_api = st.toggle("Use live weather API", value=False)
-        refresh_weather = st.button("🔄 Refresh weather data", width="stretch")
+        use_weather_api = st.toggle("Use live weather API", value=True)
+        refresh_weather = st.button("🔄 Refresh weather data", use_container_width=True)
 
     cache_buster = datetime.now(timezone.utc).timestamp() if refresh_weather else 0.0
     with st.spinner("Loading telemetry and contextual data..."):

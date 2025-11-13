@@ -67,9 +67,9 @@ def render_top_nav(
         label = f"{item.emoji} {item.label}"
         with col:
             if item.path.endswith(active_page):
-                st.button(label, width="stretch", disabled=True)
+                st.button(label, disabled=True, use_container_width=True)
             else:
-                if st.button(label, width="stretch", key=f"nav-{item.path}"):
+                if st.button(label, key=f"nav-{item.path}", use_container_width=True):
                     st.switch_page(item.path)
 
 

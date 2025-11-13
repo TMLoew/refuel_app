@@ -181,8 +181,8 @@ def render_history_charts(df: pd.DataFrame) -> None:
     weather_fig.update_layout(height=380, legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
     col1, col2 = st.columns(2)
-    col1.plotly_chart(usage_fig, width="stretch")
-    col2.plotly_chart(weather_fig, width="stretch")
+    col1.plotly_chart(usage_fig, use_container_width=True)
+    col2.plotly_chart(weather_fig, use_container_width=True)
 
 
 def render_weather_shotcast() -> None:
@@ -270,7 +270,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             )
         ],
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     kpi_cols = st.columns(3)
     kpi_cols[0].metric(
@@ -312,7 +312,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             }
         )
         .set_index("timestamp"),
-        width="stretch",
+        use_container_width=True,
     )
 
 
@@ -326,7 +326,7 @@ def render_dashboard() -> None:
     with st.sidebar:
         sidebar_info_block()
         st.subheader("Scenario controls")
-        use_weather_api = st.toggle("Use live weather API", value=False)
+        use_weather_api = st.toggle("Use live weather API", value=True)
 
     with st.spinner("Loading telemetry and contextual data..."):
         data = load_enriched_data(use_weather_api=use_weather_api)
@@ -443,7 +443,7 @@ def render_dashboard() -> None:
             color_discrete_map={0: "#2E86AB", 1: "#E74C3C"},
         )
         mix_fig.update_layout(legend_title_text="Hot day?")
-        st.plotly_chart(mix_fig, width="stretch")
+        st.plotly_chart(mix_fig, use_container_width=True)
         st.dataframe(
             latest_mix[["product", "suggested_qty", "weight_pct", "unit_price", "cost_estimate", "rainy_day"]]
             .rename(
@@ -464,7 +464,7 @@ def render_dashboard() -> None:
                     "Est. Cost (CHF)": "CHF{:.0f}",
                 }
             ),
-            width="stretch",
+            use_container_width=True,
             height=260,
         )
     else:
@@ -561,7 +561,7 @@ def render_dashboard() -> None:
                         "pred_snack_revenue": "Forecast revenue",
                     }
                 ),
-                width="stretch",
+                use_container_width=True,
                 height=280,
             )
         product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
@@ -586,7 +586,7 @@ def render_dashboard() -> None:
                         "weight": "Mix weight",
                     }
                 ).style.format({"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}"}),
-                width="stretch",
+                use_container_width=True,
                 height=280,
             )
     st.subheader("What-if forecast")

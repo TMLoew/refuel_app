@@ -7,12 +7,34 @@ import math
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import sys
 
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.pipeline import Pipeline
+
+try:
+    from backend.app.services.ml.demand_model import (
+        CHECKIN_FEATURES,
+        SNACK_FEATURES,
+        add_time_signals,
+        load_models as load_persisted_models,
+        save_models as persist_models,
+        train_models as core_train_models,
+    )
+except ModuleNotFoundError:
+    _root = Path(__file__).resolve().parents[3]
+    if str(_root) not in sys.path:
+        sys.path.append(str(_root))
+    from backend.app.services.ml.demand_model import (  # type: ignore
+        CHECKIN_FEATURES,
+        SNACK_FEATURES,
+        add_time_signals,
+        load_models as load_persisted_models,
+        save_models as persist_models,
+        train_models as core_train_models,
+    )
 
 from .weather_pipeline import (
     Ingredient,
@@ -36,6 +58,7 @@ PRODUCT_MIX_SNAPSHOT_FILE = PROJECT_ROOT / "data" / "product_mix_enriched.csv"
 PRODUCT_PRICE_FILE = PROJECT_ROOT / "data" / "product_prices.csv"
 WEATHER_PROFILE_FILE = PROJECT_ROOT / "data" / "weather_profile.json"
 RESTOCK_POLICY_FILE = PROJECT_ROOT / "data" / "restock_policy.json"
+WEATHER_CACHE_FILE = PROJECT_ROOT / "data" / "weather_cache.csv"
 DEFAULT_PRODUCT_PRICE = 3.5
 DEFAULT_RESTOCK_POLICY: Dict[str, Any] = {
     "auto_enabled": False,
@@ -58,27 +81,75 @@ WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Storm front": {"temp_offset": -1.0, "precip_multiplier": 1.8, "humidity_offset": 10},
 }
 
-CHECKIN_FEATURES = [
-    "hour",
-    "is_weekend",
-    "temperature_c",
-    "precipitation_mm",
-    "humidity_pct",
-    "event_intensity",
-    "snack_price",
-    "sin_hour",
-    "cos_hour",
-    "sin_doy",
-    "cos_doy",
-]
-
-SNACK_FEATURES = CHECKIN_FEATURES + ["checkins"]
-
 
 def _safe_precip_multiplier(numerator: float, denominator: float, floor: float = 0.05) -> float:
     denominator = max(denominator, 0.05)
     multiplier = numerator / denominator if denominator else 1.0
     return max(floor, multiplier)
+
+
+def _normalize_to_utc_naive(ts: Any) -> pd.Timestamp:
+    stamp = pd.to_datetime(ts)
+    if stamp.tzinfo is not None:
+        stamp = stamp.tz_convert("UTC").tz_localize(None)
+    return stamp
+
+
+def _load_cached_weather_window(start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    if not WEATHER_CACHE_FILE.exists():
+        return pd.DataFrame(), {}
+    try:
+        cache_df = pd.read_csv(WEATHER_CACHE_FILE, parse_dates=["timestamp"])
+    except Exception:
+        return pd.DataFrame(), {}
+    if cache_df.empty or "timestamp" not in cache_df.columns:
+        return pd.DataFrame(), {}
+    timestamps = pd.to_datetime(cache_df["timestamp"])
+    if getattr(timestamps.dt, "tz", None) is not None:
+        timestamps = timestamps.dt.tz_convert("UTC").dt.tz_localize(None)
+    cache_df["timestamp"] = timestamps
+    mask = (cache_df["timestamp"] >= start_ts) & (cache_df["timestamp"] <= end_ts)
+    subset = cache_df.loc[mask].copy()
+    if subset.empty:
+        return pd.DataFrame(), {}
+    coverage_start = subset["timestamp"].min()
+    coverage_end = subset["timestamp"].max()
+    end_aware = coverage_end.tz_localize("UTC") if coverage_end.tzinfo is None else coverage_end.tz_convert("UTC")
+    age_minutes = max(0.0, (pd.Timestamp.utcnow() - end_aware).total_seconds() / 60)
+    meta = {
+        "latency_ms": None,
+        "chunks": 0,
+        "coverage_start": coverage_start.isoformat(),
+        "coverage_end": coverage_end.isoformat(),
+        "cache_age_minutes": age_minutes,
+    }
+    return subset, meta
+
+
+def _save_weather_cache(frame: pd.DataFrame) -> None:
+    if frame.empty or "timestamp" not in frame.columns:
+        return
+    WEATHER_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    new_frame = frame.copy()
+    new_frame["timestamp"] = pd.to_datetime(new_frame["timestamp"])
+    if getattr(new_frame["timestamp"].dt, "tz", None) is not None:
+        new_frame["timestamp"] = new_frame["timestamp"].dt.tz_convert("UTC").dt.tz_localize(None)
+    if WEATHER_CACHE_FILE.exists():
+        try:
+            existing = pd.read_csv(WEATHER_CACHE_FILE, parse_dates=["timestamp"])
+            existing["timestamp"] = pd.to_datetime(existing["timestamp"])
+        except Exception:
+            existing = pd.DataFrame(columns=new_frame.columns)
+        combined = (
+            pd.concat([existing, new_frame], ignore_index=True, sort=False)
+            .drop_duplicates(subset="timestamp")
+            .sort_values("timestamp")
+        )
+        cutoff = combined["timestamp"].max() - pd.Timedelta(days=60)
+        combined = combined[combined["timestamp"] >= cutoff]
+    else:
+        combined = new_frame
+    combined.to_csv(WEATHER_CACHE_FILE, index=False)
 
 
 @st.cache_data(show_spinner=False)
@@ -154,14 +225,11 @@ def sample_weather_archetype(history: pd.DataFrame, random_state: Optional[int] 
     return choice, scenarios[choice]
 
 
-@st.cache_data(show_spinner=False)
-def load_enriched_data(
+def build_enriched_history(
     csv_path: Path = DATA_FILE,
-    use_weather_api: bool = False,
-    cache_buster: float = 0.0,
+    use_weather_api: bool = True,
 ) -> pd.DataFrame:
-    """Load gym dataset and enrich it with weather + snack context."""
-    _ = cache_buster  # ensures cache invalidation when requested
+    """Pure data loader so backend scripts can reuse the enrichment logic."""
     if not csv_path.exists():
         return pd.DataFrame()
 
@@ -188,15 +256,25 @@ def load_enriched_data(
     timestamps = tuple(df["timestamp"])
     weather_source = "synthetic"
     weather_frame = pd.DataFrame()
-    weather_meta_extra: Dict[str, float] = {}
+    weather_meta_extra: Dict[str, Any] = {}
+    cache_start = _normalize_to_utc_naive(df["timestamp"].min()).floor("h")
+    cache_end = _normalize_to_utc_naive(df["timestamp"].max()).ceil("h")
 
     if use_weather_api:
         try:
             weather_frame, weather_meta_extra = fetch_hourly_weather_frame(timestamps)
             if not weather_frame.empty:
                 weather_source = "open-meteo"
+                _save_weather_cache(weather_frame)
         except Exception:
             weather_frame = pd.DataFrame()
+
+        if weather_frame.empty:
+            cached_frame, cache_meta = _load_cached_weather_window(cache_start, cache_end)
+            if not cached_frame.empty:
+                weather_frame = cached_frame
+                weather_meta_extra = cache_meta
+                weather_source = "cached"
 
     if weather_frame.empty:
         weather_frame = build_synthetic_weather_frame(timestamps)
@@ -252,63 +330,38 @@ def load_enriched_data(
         "coverage_end": weather_meta_extra.get("coverage_end", df["timestamp"].max().isoformat()),
         "latency_ms": weather_meta_extra.get("latency_ms"),
         "chunks": weather_meta_extra.get("chunks"),
+        "cache_age_minutes": weather_meta_extra.get("cache_age_minutes"),
     }
     return df
 
 
-def add_time_signals(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Attach cyclical encodings required by the simple regressors."""
-    enriched = dataframe.copy()
-    enriched["sin_hour"] = np.sin(2 * np.pi * enriched["hour"] / 24)
-    enriched["cos_hour"] = np.cos(2 * np.pi * enriched["hour"] / 24)
-    enriched["sin_doy"] = np.sin(2 * np.pi * enriched["day_of_year"] / 365)
-    enriched["cos_doy"] = np.cos(2 * np.pi * enriched["day_of_year"] / 365)
-    return enriched
+@st.cache_data(show_spinner=False)
+def load_enriched_data(
+    csv_path: Path = DATA_FILE,
+    use_weather_api: bool = True,
+    cache_buster: float = 0.0,
+) -> pd.DataFrame:
+    """Cached wrapper around build_enriched_history for Streamlit sessions."""
+    _ = cache_buster  # ensures cache invalidation when requested
+    return build_enriched_history(csv_path=csv_path, use_weather_api=use_weather_api)
 
 
 @st.cache_resource(show_spinner=False)
-def train_models(df: pd.DataFrame) -> Tuple[Pipeline, Pipeline]:
-    """Train lightweight regressors for attendance and snack demand."""
+def train_models(df: pd.DataFrame) -> Tuple[Optional[object], Optional[object]]:
+    """Load cached models or train + persist a new pair."""
     if df.empty:
         return None, None
-
+    persisted = load_persisted_models()
+    if all(persisted):
+        return persisted
     feature_df = add_time_signals(df)
     required_cols = set(CHECKIN_FEATURES)
     missing = sorted(required_cols - set(feature_df.columns))
     if missing:
         raise ValueError(f"Missing engineered features: {missing}")
-    checkin_model = Pipeline(
-        [
-            (
-                "model",
-                HistGradientBoostingRegressor(
-                    max_depth=6,
-                    learning_rate=0.12,
-                    max_iter=250,
-                    l2_regularization=0.1,
-                    random_state=42,
-                ),
-            )
-        ]
-    )
-    checkin_model.fit(feature_df[CHECKIN_FEATURES], feature_df["checkins"])
-
-    snack_model = Pipeline(
-        [
-            (
-                "model",
-                HistGradientBoostingRegressor(
-                    max_depth=6,
-                    learning_rate=0.12,
-                    max_iter=300,
-                    l2_regularization=0.1,
-                    random_state=7,
-                ),
-            )
-        ]
-    )
-    snack_model.fit(feature_df[SNACK_FEATURES], feature_df["snack_units"])
-    return checkin_model, snack_model
+    models = core_train_models(feature_df)
+    persist_models(models)
+    return models
 
 
 def build_scenario_forecast(
@@ -673,9 +726,13 @@ def append_pos_log(entry: Dict[str, Any]) -> None:
     record = entry.copy()
     breakdown = record.get("product_breakdown")
     if isinstance(breakdown, dict):
-        record["product_breakdown"] = json.dumps(breakdown)
+        normalized = {str(k): int(v) for k, v in breakdown.items() if v and int(v) > 0}
+        record["product_breakdown"] = json.dumps(normalized)
+        if normalized:
+            record["sales_units"] = int(sum(normalized.values()))
     elif breakdown in (None, "", []):
         record["product_breakdown"] = ""
+    record["sales_units"] = int(record.get("sales_units", 0) or 0)
     df = pd.DataFrame([record])
     header = not POS_LOG_FILE.exists()
     df.to_csv(POS_LOG_FILE, mode="a", header=header, index=False)
@@ -687,7 +744,8 @@ def load_pos_log() -> pd.DataFrame:
         return pd.DataFrame(columns=["timestamp", "sales_units", "stock_remaining", "checkins_recorded", "notes"])
     df = pd.read_csv(POS_LOG_FILE)
     if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        df["timestamp"] = df["timestamp"].where(df["timestamp"].notna(), pd.NaT)
     if "product_breakdown" not in df.columns:
         df["product_breakdown"] = [{} for _ in range(len(df))]
     else:

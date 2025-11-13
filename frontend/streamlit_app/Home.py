@@ -179,7 +179,7 @@ with st.sidebar:
     st.caption("Data updated every hour · Last refresh from notebook sync.")
     st.divider()
     st.subheader("Data slice")
-    use_weather_api = st.toggle("Use live weather API", value=False, key="home-weather-toggle")
+    use_weather_api = st.toggle("Use live weather API", value=True, key="home-weather-toggle")
 
 with st.spinner("Loading telemetry for preview..."):
     data = load_enriched_data(use_weather_api=use_weather_api)
@@ -387,7 +387,7 @@ with pricing_tab:
         labels={"x": "Price (CHF)", "y": "Expected snack units"},
         title="Elasticity curve",
     )
-    st.plotly_chart(elasticity_fig, width="stretch")
+    st.plotly_chart(elasticity_fig, use_container_width=True)
     expected_at_pref = avg_units * (preferred_price / avg_price) ** elasticity
     st.metric("Expected demand at test price", f"{expected_at_pref:.0f} units")
 
@@ -410,7 +410,7 @@ with pricing_tab:
     )
     profit_fig.add_vline(x=optimal_price, line_dash="dash", line_color="green", annotation_text="Optimal")
     profit_fig.add_vline(x=preferred_price, line_dash="dot", line_color="blue", annotation_text="Test price")
-    st.plotly_chart(profit_fig, width="stretch")
+    st.plotly_chart(profit_fig, use_container_width=True)
 
     if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:
         st.subheader("Product mix outlook")
@@ -450,7 +450,7 @@ with pricing_tab:
                 title=f"Recommended product share · {selected_mix_date}",
                 labels={"weight_pct": "Mix share (%)", "product": "", "season": "Season"},
             )
-            st.plotly_chart(mix_fig, width="stretch")
+            st.plotly_chart(mix_fig, use_container_width=True)
             st.dataframe(
                 mix_slice[
                     ["product", "suggested_qty", "weight_pct", "cost_estimate", "hot_day", "rainy_day"]
@@ -466,7 +466,7 @@ with pricing_tab:
                     }
                 )
                 .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}", "Est. Cost (CHF)": "CHF{:.0f}"}),
-                width="stretch",
+                use_container_width=True,
                 height=260,
             )
         else:
@@ -489,7 +489,7 @@ with inventory_tab:
         stock_fig = px.bar(x=["Current"], y=[current_stock], labels={"x": "", "y": "Units"}, title="Stock vs. safety bands")
         stock_fig.add_hrect(y0=safety_stock, y1=safety_stock, line_width=2, line_color="orange", annotation_text="Safety stock", annotation_position="top right")
         stock_fig.add_hrect(y0=reorder_point, y1=reorder_point, line_width=2, line_color="red", annotation_text="Reorder point", annotation_position="bottom right")
-        st.plotly_chart(stock_fig, width="stretch")
+        st.plotly_chart(stock_fig, use_container_width=True)
         rolling_daily = daily_summary["snack_units"].rolling(7, min_periods=1).mean().iloc[-1]
         auto_stock = st.number_input("Auto-stock level (units)", min_value=0.0, value=current_stock, step=10.0, key="auto-stock")
         auto_lead = st.slider("Auto lead time (days)", 1, 21, lead_time_days, key="auto-lead")
@@ -531,8 +531,8 @@ with inventory_tab:
             if isinstance(hist_df, pd.DataFrame) and not hist_df.empty:
                 sim_fig = px.line(hist_df, x="date", y="stock_after", title="Simulated stock over historic weeks")
                 sim_fig.add_hline(y=sim_safety, line_dash="dot", line_color="orange", annotation_text="Safety stock")
-                st.plotly_chart(sim_fig, width="stretch")
-                st.dataframe(hist_df, width="stretch", height=300)
+                st.plotly_chart(sim_fig, use_container_width=True)
+                st.dataframe(hist_df, use_container_width=True, height=300)
 
     else:
         st.subheader("Weather-aware autopilot")
@@ -691,12 +691,12 @@ with inventory_tab:
                             marker=dict(color="green", size=10),
                             name="Reorders",
                         )
-                    st.plotly_chart(auto_fig, width="stretch")
+                    st.plotly_chart(auto_fig, use_container_width=True)
                     st.dataframe(
                         auto_df_display[
                             ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
                         ],
-                        width="stretch",
+                        use_container_width=True,
                         height=320,
                     )
                 else:
@@ -720,13 +720,13 @@ with inventory_tab:
                         marker=dict(color="green", size=10),
                         name="Reorders",
                     )
-                st.plotly_chart(auto_fig, width="stretch")
+                st.plotly_chart(auto_fig, use_container_width=True)
 
                 st.dataframe(
                     history_view.tail(60)[
                         ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
                     ],
-                    width="stretch",
+                    use_container_width=True,
                     height=320,
                 )
                 download_blob = history_view.to_csv(index=False).encode("utf-8")
@@ -760,7 +760,7 @@ dow_fig = px.bar(
     title="Average demand by weekday",
     labels={"value": "Average per hour", "variable": ""},
 )
-st.plotly_chart(dow_fig, width="stretch")
+st.plotly_chart(dow_fig, use_container_width=True)
 st.table(
     dow_stats[["weekday_name", "snack_units", "suggested_price"]]
     .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (CHF)"})

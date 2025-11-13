@@ -37,7 +37,7 @@ st.caption("Understand how weather, gym attendance, and snack demand interact us
 with st.sidebar:
     sidebar_info_block()
     st.subheader("Data slice")
-    use_weather_api = st.toggle("Use live weather API", value=False)
+    use_weather_api = st.toggle("Use live weather API", value=True)
     lookback_days = st.slider("History window (days)", 3, 30, 14)
 
 with st.spinner("Loading telemetry..."):
@@ -71,7 +71,7 @@ corr_fig = px.imshow(
     color_continuous_scale="RdBu",
     title="Pearson correlation matrix",
 )
-st.plotly_chart(corr_fig, width="stretch")
+st.plotly_chart(corr_fig, use_container_width=True)
 hover_tip(
     "Hover for correlation math",
     "Pearson r = Σ(x - x̄)(y - ȳ) / sqrt[Σ(x - x̄)² Σ(y - ȳ)²], bounded between -1 and 1.",
@@ -80,7 +80,7 @@ hover_tip(
 st.subheader("Pairwise relationships")
 pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
 pair_fig = px.scatter_matrix(window_df, dimensions=pair_cols, color="weather_label", title="Scatter matrix with weather classes")
-st.plotly_chart(pair_fig, width="stretch")
+st.plotly_chart(pair_fig, use_container_width=True)
 hover_tip(
     "Hover for scatter-matrix math",
     "Each panel plots raw pairs (x_i, y_i); diagonal histograms show marginals. Trendlines use y = β₀ + β₁x from ordinary least squares.",
@@ -98,7 +98,7 @@ scatter_cols[0].plotly_chart(
         trendline="ols",
         title="Temperature vs. gym attendance",
     ),
-    width="stretch",
+    use_container_width=True,
 )
 hover_tip(
     "Hover for temperature → check-ins fit",
@@ -123,7 +123,7 @@ scatter_cols[1].plotly_chart(
         trendline="ols",
         title="Precipitation vs. snack demand",
     ),
-    width="stretch",
+    use_container_width=True,
 )
 hover_tip(
     "Hover for precipitation → snacks fit",
@@ -147,7 +147,7 @@ coef_table = pd.DataFrame(
         "Snack p": snacks_model.pvalues,
     }
 ).round(3)
-st.dataframe(coef_table, width="stretch")
+st.dataframe(coef_table, use_container_width=True)
 
 hover_tip(
     "Hover for regression math",
@@ -168,7 +168,7 @@ daily_fig = px.line(
     labels={"value": "Value", "variable": "Series"},
     title="Daily weather & demand trend",
 )
-st.plotly_chart(daily_fig, width="stretch")
+st.plotly_chart(daily_fig, use_container_width=True)
 hover_tip(
     "Hover for daily aggregation math",
     "Temp line averages all hours in a day (mean over H_d). Precip, check-ins, and snack units sum over the same hourly set.",

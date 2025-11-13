@@ -50,7 +50,7 @@ mask = data["timestamp"].between(pd.Timestamp(selected_range[0]), pd.Timestamp(s
 st.subheader("Editable grid")
 edited = st.data_editor(
     data.loc[mask].head(sample_rows).set_index("timestamp"),
-    width="stretch",
+    use_container_width=True,
     num_rows="dynamic",
     height=420,
     key="editor-grid",
@@ -69,12 +69,12 @@ st.download_button(
 
 with st.expander("Summary stats", expanded=True):
     summary = data.describe()[["checkins", "snack_units", "snack_revenue", "temperature_c"]]
-    st.dataframe(summary, width="stretch")
+    st.dataframe(summary, use_container_width=True)
 
 st.subheader("Upload replacement data")
 uploaded = st.file_uploader("Upload new `gym_badges.csv`", type=["csv"])
 if uploaded:
     new_df = pd.read_csv(uploaded)
     st.success(f"Loaded {len(new_df)} rows. Replace `{DATA_FILE}` manually to use this dataset.")
-    st.dataframe(new_df.head(20), width="stretch")
+    st.dataframe(new_df.head(20), use_container_width=True)
 render_footer()

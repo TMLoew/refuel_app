@@ -29,6 +29,14 @@ DEFAULT_RESTOCK_POLICY = {
     "last_auto_restock": None,
 }
 
+DEFAULT_POS_PRODUCTS = [
+    "Protein Shake",
+    "Electrolyte Drink",
+    "Iced Matcha",
+    "Recovery Smoothie",
+    "Isotonic Lemon",
+]
+
 try:
     from frontend.streamlit_app.components.layout import (
         render_top_nav,
@@ -68,7 +76,7 @@ st.caption("Log live sales + check-ins at the counter and receive instant low st
 
 with st.sidebar:
     sidebar_info_block()
-    use_weather_api = st.toggle("Use live weather API", value=False, key="pos-weather")
+    use_weather_api = st.toggle("Use live weather API", value=True, key="pos-weather")
     scenario_name = st.selectbox("Weather scenario", list(WEATHER_SCENARIOS.keys()), key="pos-weather-pattern")
     horizon_hours = st.slider("Forecast horizon (hours)", 3, 24, 12, step=3)
 
@@ -81,7 +89,7 @@ if base_data.empty:
 models = train_models(base_data)
 log_df = load_pos_log()
 product_mix_df = load_product_mix_data()
-product_catalog = get_product_catalog(product_mix_df)
+product_catalog = get_product_catalog(product_mix_df) or DEFAULT_POS_PRODUCTS
 restock_policy = load_restock_policy()
 latest_stock = None
 if not log_df.empty and "stock_remaining" in log_df.columns:
@@ -102,7 +110,6 @@ with col_form:
         now = datetime.now()
         entry_date = st.date_input("Date", value=now.date())
         entry_time = st.time_input("Time", value=time(hour=now.hour, minute=now.minute))
-        logged_sales = st.number_input("Snacks sold (units)", min_value=0, value=0, step=1)
         logged_checkins = st.number_input("Gym check-ins recorded", min_value=0, value=0, step=1)
         restock_delta = st.number_input(
             "Units restocked before this entry",
@@ -111,19 +118,22 @@ with col_form:
             step=1,
             help="If you added stock since the previous entry, capture it here.",
         )
+        st.caption("Log units sold for each product (leave zero if none sold during this entry).")
         per_product_sales: Dict[str, int] = {}
-        if product_catalog:
-            with st.expander("Optional: detail units by product", expanded=False):
-                st.caption("Overrides the total snack units input above when filled in.")
-                for product in product_catalog:
-                    widget_key = f"pos-sales-{_slugify(product)}"
-                    per_product_sales[product] = st.number_input(
-                        f"{product} units",
-                        min_value=0,
-                        value=0,
-                        step=1,
-                        key=widget_key,
-                    )
+        cols_per_row = min(3, len(product_catalog))
+        product_cols = st.columns(cols_per_row)
+        for idx, product in enumerate(product_catalog):
+            col = product_cols[idx % cols_per_row]
+            widget_key = f"pos-sales-{_slugify(product)}"
+            with col:
+                per_product_sales[product] = st.number_input(
+                    f"{product}",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key=widget_key,
+                )
+        st.caption("Need a new SKU? Add it to your product mix CSV so it appears here automatically.")
         if latest_stock is None:
             baseline_stock = st.number_input(
                 "Current stock on shelf (units)",
@@ -139,13 +149,13 @@ with col_form:
                 "We will subtract the sales you log below."
             )
         notes = st.text_input("Notes / special context", "")
-        submitted = st.form_submit_button("Log entry", width="stretch")
+        submitted = st.form_submit_button("Log entry", use_container_width=True)
 
     if submitted:
         timestamp = datetime.combine(entry_date, entry_time)
         effective_stock_before = baseline_stock + restock_delta
         product_breakdown = {product: qty for product, qty in per_product_sales.items() if qty > 0}
-        logged_units = sum(product_breakdown.values()) if product_breakdown else logged_sales
+        logged_units = sum(product_breakdown.values())
         stock_remaining = int(max(0, effective_stock_before - logged_units))
         append_pos_log(
             {
@@ -201,7 +211,7 @@ with col_form:
             if isinstance(entry, dict) and entry
             else ""
         )
-    st.dataframe(recent_entries, width="stretch", height=260)
+    st.dataframe(recent_entries, use_container_width=True, height=260)
 
 with col_alert:
     st.subheader("Live stock posture")
@@ -333,7 +343,7 @@ else:
             title="Snack demand outlook (hourly)",
             labels={"pred_snack_units": "Units", "hour": "Hour"},
         )
-        st.plotly_chart(fc_fig, width="stretch")
+        st.plotly_chart(fc_fig, use_container_width=True)
 
         compare_cols = st.columns(2)
         with compare_cols[0]:
@@ -356,7 +366,7 @@ else:
                         "snack_price": "Price (CHF)",
                     }
                 ),
-                width="stretch",
+                use_container_width=True,
                 height=260,
             )
         with compare_cols[1]:
@@ -377,7 +387,7 @@ else:
                         barmode="group",
                         title="Logged vs. forecast snacks",
                     )
-                    st.plotly_chart(err_fig, width="stretch")
+                    st.plotly_chart(err_fig, use_container_width=True)
                 else:
                     st.info("Log entries are too far from the forecast horizon to compare.")
             else:

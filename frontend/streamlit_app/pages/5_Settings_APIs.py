@@ -19,6 +19,7 @@ from frontend.streamlit_app.components.layout import (
 try:
     from frontend.streamlit_app.services.data_utils import (
         load_enriched_data,
+        load_pos_log,
         load_procurement_plan,
         load_weather_profile,
         save_weather_profile,
@@ -26,7 +27,7 @@ try:
 except ImportError as import_exc:
     if "load_procurement_plan" not in str(import_exc):
         raise
-    from frontend.streamlit_app.services.data_utils import load_enriched_data  # type: ignore
+    from frontend.streamlit_app.services.data_utils import load_enriched_data, load_pos_log  # type: ignore
 
     def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
         return pd.DataFrame()
@@ -55,7 +56,7 @@ with st.form("weather-form"):
     with col2:
         lon = st.number_input("Longitude", value=float(profile["lon"]), step=0.1, format="%.4f")
         cache_hours = st.slider("Cache horizon (hours)", 1, 24, int(profile.get("cache_hours", 6)))
-    submitted = st.form_submit_button("Save weather profile", width="stretch")
+    submitted = st.form_submit_button("Save weather profile", use_container_width=True)
     if submitted:
         save_weather_profile({"lat": float(lat), "lon": float(lon), "api_timeout": api_timeout, "cache_hours": cache_hours})
         st.success(
@@ -66,12 +67,54 @@ st.subheader("API health")
 data_sample = load_enriched_data(use_weather_api=True)
 weather_meta = data_sample.attrs.get("weather_meta", {})
 latency = weather_meta.get("latency_ms")
-latency_text = f"{latency:.0f} ms" if latency else "n/a"
+if latency:
+    weather_value = "✅ OK"
+    weather_delta = f"latency {latency:.0f} ms"
+elif weather_meta:
+    weather_value = "ℹ️ Cached"
+    weather_delta = "using cached weather"
+else:
+    weather_value = "ℹ️ Pending"
+    weather_delta = "no API calls yet"
+
+now_utc = pd.Timestamp.now(timezone.utc)
+if data_sample.empty or "timestamp" not in data_sample.columns:
+    gym_value = "ℹ️ No data"
+    gym_delta = "upload telemetry"
+else:
+    latest_gym_ts = pd.to_datetime(data_sample["timestamp"].max())
+    if latest_gym_ts.tzinfo is None:
+        latest_gym_ts = latest_gym_ts.tz_localize("UTC")
+    gym_delay_min = max(0, (now_utc - latest_gym_ts).total_seconds() / 60)
+    if gym_delay_min <= 5:
+        gym_value = "✅ Fresh"
+    elif gym_delay_min <= 30:
+        gym_value = "⚠️ Delay"
+    else:
+        gym_value = "❌ Stale"
+    gym_delta = f"{gym_delay_min:.0f} min old" if gym_delay_min < 90 else f"{gym_delay_min/60:.1f} h old"
+
+pos_log = load_pos_log()
+if pos_log.empty:
+    pos_value = "ℹ️ No data"
+    pos_delta = "no POS events"
+else:
+    latest_pos_ts = pd.to_datetime(pos_log["timestamp"].max())
+    if latest_pos_ts.tzinfo is None:
+        latest_pos_ts = latest_pos_ts.tz_localize("UTC")
+    pos_delay_min = max(0, (now_utc - latest_pos_ts).total_seconds() / 60)
+    if pos_delay_min <= 10:
+        pos_value = "✅ Live"
+    elif pos_delay_min <= 60:
+        pos_value = "⚠️ Delay"
+    else:
+        pos_value = "❌ Stale"
+    pos_delta = f"{pos_delay_min:.0f} min old" if pos_delay_min < 120 else f"{pos_delay_min/60:.1f} h old"
 
 health_cols = st.columns(3)
-health_cols[0].metric("Weather API", "✅ OK" if latency else "ℹ️ Pending", delta=f"latency {latency_text}")
-health_cols[1].metric("Gym sensors", "⚠️ Delay", delta="+18 min")
-health_cols[2].metric("POS snacks", "✅ OK", delta="live")
+health_cols[0].metric("Weather API", weather_value, delta=weather_delta)
+health_cols[1].metric("Gym sensors", gym_value, delta=gym_delta)
+health_cols[2].metric("POS snacks", pos_value, delta=pos_delta)
 
 st.subheader("Secrets & tokens")
 with st.expander("Current tokens (redacted)", expanded=False):
@@ -131,7 +174,7 @@ else:
         if {"scenario", "reorder_qty"}.issubset(table_df.columns)
         else list(table_df.columns)
     )
-    st.dataframe(table_df.head(25)[columns_to_show], width="stretch", height=300)
+    st.dataframe(table_df.head(25)[columns_to_show], use_container_width=True, height=300)
 
 st.subheader("Export settings")
 export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon)}, indent=2)

@@ -1,6 +1,6 @@
 # Refuel Operations Cockpit
 
-Refuel is our data cockpit that blends weather signals, gym attendance, and snack demand to guide merchandising, staffing, and marketing for campus fuel bars. The repo contains both the Streamlit frontend and the (in-progress) backend services used to synthesize telemetry.
+Refuel is our data cockpit that blends weather signals, gym attendance, and snack demand to guide merchandising, staffing, and marketing for campus fuel bars. The repo contains the Streamlit multipage frontend plus backend services that hydrate telemetry, train ML models, and persist recommendations.
 
 ## Live Demo
 
@@ -24,12 +24,22 @@ python backend/app/services/weather_service.py
 python backend/app/services/pipeline.py
 ```
 
-## Repository Layout
+## Repository Layout & Feature Map
 
-- `frontend/streamlit_app/` – multipage Streamlit app (dashboard, forecast explorer, what-if simulator, data editor, settings)
-- `frontend/streamlit_app/services/` – shared loaders, weather API wrapper, synthetic data utilities
-- `backend/` – placeholder for future API services
-- `data/` – sample telemetry (`gym_badges.csv`)
+- `frontend/streamlit_app/Home.py` – landing hub with autopilot summaries, navigation shortcuts, and telemetry hero cards
+- `frontend/streamlit_app/pages/1_Dashboard.py` – live dashboard (traffic, weather, mix tables, snapshot export)
+- `frontend/streamlit_app/pages/2_Forecasts.py` – forecast explorer (scenario levers, model diagnostics, procurement export)
+- `frontend/streamlit_app/pages/3_WhatIf_Sim.py` – what-if simulator for allocation & pricing experiments
+- `frontend/streamlit_app/pages/4_Data_Editor.py` – CSV uploader/editor for telemetry
+- `frontend/streamlit_app/pages/5_Settings_APIs.py` – API/health console (weather profile, webhook states, cache latency)
+- `frontend/streamlit_app/pages/6_Statistics.py` – diagnostics on correlations, residuals, and seasonality
+- `frontend/streamlit_app/pages/7_POS_Console.py` – POS entry (per-product sales logging, auto restock)
+- `frontend/streamlit_app/pages/8_Price_Manager.py` – SKU price overrides
+- `frontend/streamlit_app/services/data_utils.py` – core data layer (live weather → cache fallback, enrichment, ML helpers)
+- `frontend/streamlit_app/services/weather_pipeline.py` – Open‑Meteo client + synthetic weather generator
+- `backend/app/services/ml/` – shared demand model training + CLI trainer
+- `backend/app/services/pipeline.py` – batch builder for daily product mix CSV
+- `data/` – sample telemetry & persisted artifacts (`gym_badges*.csv`, product mix, weather cache, POS log, etc.)
 - `logo.webp` – brand asset used across the UI
 
 ## Data Inputs & Persistence
@@ -37,10 +47,16 @@ python backend/app/services/pipeline.py
 - **Gym telemetry** – Drop hourly badge exports into `data/gym_badges_0630_2200_long.csv` (preferred) or `data/gym_badges.csv`. The loader auto-detects the first file it finds and enriches it with synthetic or live weather before the dashboard renders anything.
 - **Product mix planning** – Keep daily merchandising guidance in `data/product_mix_daily.csv`. At runtime the app uses `build_daily_product_mix_view()` to merge that daily plan with aggregated telemetry so you can compare suggested units vs. implied demand without mutating the raw sources.
 - **Snapshots** – Use the “Save snapshot” button in the dashboard’s Product Mix section to persist the merged view (including gaps and implied units) to `data/product_mix_enriched.csv`. Any Streamlit page or external notebook can reload it through `load_product_mix_snapshot()` for reproducible reviews.
-- **POS console + restocks** – `data/pos_runtime_log.csv` now captures each counter entry with optional per-product breakdowns and current shelf stock. Auto-restock preferences live in `data/restock_policy.json` and can be managed from the POS Console.
+- **POS console + restocks** – `data/pos_runtime_log.csv` captures every entry with per-product breakdowns and shelf stock. Auto restock preferences live in `data/restock_policy.json` and can be managed from the POS Console.
 - **Procurement autopilot** – Running the autopilot simulation inside `Home.py` or publishing a scenario from the Forecast Explorer writes to `data/procurement_plan.csv`. The file carries `plan_*` metadata columns (weather pattern, promo, horizon, etc.) that downstream tabs surface automatically. Streamlit POS events append to `data/pos_runtime_log.csv`.
 - **Price overrides** – Use the Price Manager page to edit `data/product_prices.csv` so each SKU has its own unit price. Those values feed into the dashboard mix snapshot, scenario allocations, and procurement exports.
 - **Config validator** – Run `python scripts/validate_configs.py` to sanity-check that mix, price, and restock files exist and contain the expected schema before deploying changes.
+
+## Live Weather & Caching
+
+- Live weather is on by default across the app. Hourly Open‑Meteo pulls hydrate the telemetry loader, POS console, dashboards, and forecasts.
+- Successful fetches are persisted to `data/weather_cache.csv`. When the API is unreachable, the loader transparently falls back to that cached window before resorting to synthetic weather, so the UI keeps rendering with real-world history.
+- The Settings page surfaces latency and cache age so you can tell whether views are using live, cached, or fallback data.
 
 ## Forecast Explorer & Scenarios
 
@@ -51,15 +67,25 @@ python backend/app/services/pipeline.py
 
 ## Forecasting & Automation
 
-- The dashboard adds a “Daily snack outlook” widget that aggregates historical telemetry plus the ML scenario forecast to daily totals, making it easier to compare actual vs. predicted check-ins/snacks per day.
-- Daily snack forecasts are allocated across the merchandising mix via `allocate_product_level_forecast`, so you can sanity-check product-level expectations against suggested quantities for the next 72 hours.
-- The POS Console supports item-level logging and can auto-trigger restock entries when inventory dips below a configurable floor (with cooldown protection). Manual and automatic restocks both flow through the same log, so downstream planners see a unified stock history.
+- Lightweight HistGradientBoosting models for check-ins + snack demand live under `backend/app/services/ml/`. The Streamlit app loads persisted weights if present or retrains them automatically when enough telemetry exists, caching artifacts in `model/`.
+- The Home hero (“Daily snack outlook”) aggregates historical telemetry plus the scenario forecast to daily totals, making it easier to compare actual vs. predicted check-ins/snacks per day.
+- Product-level allocation happens via `allocate_product_level_forecast`, so every forecasted unit is mapped onto the current mix weights for SKU-specific planning.
+- The autopilot simulation (Home) uses those models, live/cached weather, and price overrides to propose procurement actions and write them to `data/procurement_plan.csv` along with scenario metadata.
+- The POS Console enforces per-product logging, auto-adjusts stock levels, and can trigger restocks when thresholds are breached (with cooldown). Manual and automatic restocks both flow through the same log, so downstream planners see a unified history.
+
+## Settings & Operations
+
+- Weather profile (lat/lon, cache horizon, timeout) can be edited on the Settings page and persists to `data/weather_profile.json`.
+- Health cards show live API latency, gym sensor freshness (minutes since last telemetry), and POS heartbeat using real timestamps instead of placeholders.
+- Token + webhook sections provide placeholders for ops notes while actual secrets remain managed by your deployment platform.
 
 ## Dev Tips
 
 - Use the top navigation bar inside Streamlit to hop between modules.
 - The Settings page exposes weather API latency, credentials placeholders, and webhook status.
 - Forecast Explorer features coefficient breakdowns, residual diagnostics, and correlation heatmaps to understand drivers.
+- POS Console defaults to the product catalog detected in `data/product_mix_daily.csv` (with a sensible fallback list) so staff can log SKU-level sales quickly.
+- If you need to prime the ML models outside of Streamlit, run `python backend/app/services/ml/train_demand_model.py --csv data/gym_badges_0630_2200_long.csv`.
 
 ## Links
 

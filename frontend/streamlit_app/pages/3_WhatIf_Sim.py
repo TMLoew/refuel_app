@@ -31,7 +31,7 @@ st.caption("Stack two competing scenarios, stress test the demand outlook, and q
 
 with st.sidebar:
     sidebar_info_block()
-    use_weather_api = st.toggle("Use live weather API", value=False, key="whatif-weather")
+    use_weather_api = st.toggle("Use live weather API", value=True, key="whatif-weather")
 
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
@@ -165,7 +165,7 @@ for col in ["checkins", "snack_units", "snack_revenue"]:
         )
     )
 comp_fig.update_layout(barmode="group", title="Aggregate forecast comparison")
-st.plotly_chart(comp_fig, width="stretch")
+st.plotly_chart(comp_fig, use_container_width=True)
 
 st.subheader("Hourly trajectory")
 combined = pd.concat(
@@ -198,7 +198,7 @@ line_fig.update_layout(
     yaxis2=dict(title="Snack units", overlaying="y", side="right"),
     title="Projected hourly demand profiles",
 )
-st.plotly_chart(line_fig, width="stretch")
+st.plotly_chart(line_fig, use_container_width=True)
 
 st.subheader("Scenario inputs recap")
 st.write("Scenario A", scenario_a)
