@@ -130,7 +130,7 @@ def _inject_theme_css() -> None:
         <style>
         :root {
             --refuel-primary: #1f6f8b;
-            --refuel-surface: #f6f9fc;
+            --refuel-surface: #ffffff;
             --refuel-text: #1c2a3a;
             --refuel-pill-bg: #eef3f8;
             --refuel-pill-fg: #1c2a3a;
