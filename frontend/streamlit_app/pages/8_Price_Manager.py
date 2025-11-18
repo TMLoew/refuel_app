@@ -105,6 +105,4 @@ with remove_col:
     else:
         st.info("No products available to remove.")
 
-st.subheader("Current file snapshot")
-st.dataframe(load_product_prices(), use_container_width=True, height=280)
 render_footer()

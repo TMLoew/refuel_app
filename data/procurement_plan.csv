@@ -1,2 +1,16 @@
-date,scenario,checkins_est,temperature_c,price,demand_est,sold,profit,stock_before,stock_after,reordered,reorder_qty,sim_block,sales_boost_pct,plan_generated_at,plan_weather_pattern,plan_marketing_boost_pct,plan_price_change_pct,plan_price_strategy_pct,plan_unit_cost,plan_fee,plan_horizon_days,plan_lead_time_days,plan_safety_stock,plan_reorder_qty,plan_temp_manual,plan_precip_manual,plan_event_intensity,plan_sales_boost_pct,plan_block_id
-2025-11-13,Temperate & sunny,125.3,11.4,3.0,192.3,192.3,192.33,8269.6,8077.3,,0.0,7,0,2025-11-13T19:28:40+00:00,Temperate & sunny,10,0,0,1.80,0.20,1,7,2506.7,4723.7,0,0.0,1.0,0,7
+date,product,forecast_units,suggested_qty,weight,unit_price,plan_generated_at,plan_source,plan_weather_pattern,plan_horizon_hours,plan_temp_manual,plan_precip_manual,plan_event_intensity,plan_marketing_boost_pct,plan_snack_price_change_pct
+2025-11-06,Protein Shake,20.34558892633956,8,0.2541,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-06,Electrolyte Drink,18.0235815321489,7,0.2251,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-06,Iced Matcha,12.971213719271974,5,0.162,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-06,Recovery Smoothie,14.412459688079972,5,0.18,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-06,Isotonic Lemon,14.324383545541705,5,0.1789,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-07,Protein Shake,34.65060413534759,8,0.2541,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-07,Electrolyte Drink,30.695989731864394,7,0.2251,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-07,Iced Matcha,22.091294253940614,5,0.162,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-07,Recovery Smoothie,24.545882504378458,5,0.18,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-07,Isotonic Lemon,24.395879889073925,5,0.1789,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-08,Protein Shake,16.159888170621805,8,0.2541,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-08,Electrolyte Drink,14.315587671023094,7,0.2251,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-08,Iced Matcha,10.302644170172107,5,0.162,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-08,Recovery Smoothie,11.44738241130234,5,0.18,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0
+2025-11-08,Isotonic Lemon,11.377426185455494,5,0.1789,3.5,2025-11-18T22:52:06+00:00,Forecast Explorer,Temperate & sunny,48,0,0.0,1.0,10,0

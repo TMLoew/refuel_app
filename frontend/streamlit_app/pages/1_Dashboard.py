@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 from datetime import datetime, timezone
+from typing import Optional
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
@@ -27,36 +28,16 @@ except ImportError:
         def hover_tip(label: str, tooltip: str) -> None:
             st.caption(f"{label}: {tooltip}")
 
-try:
-    from frontend.streamlit_app.services.data_utils import (
-        WEATHER_SCENARIOS,
-        build_scenario_forecast,
-        load_enriched_data,
-        load_procurement_plan,
-        load_weather_profile,
-        save_weather_profile,
-        train_models,
-    )
-    from frontend.streamlit_app.services import weather_pipeline
-except ImportError as import_exc:  # fallback for older deployments missing load_procurement_plan
-    if "load_procurement_plan" not in str(import_exc):
-        raise
-    from frontend.streamlit_app.services.data_utils import (  # type: ignore
-            WEATHER_SCENARIOS,
-        build_scenario_forecast,
-        load_enriched_data,
-        load_weather_profile,
-        save_weather_profile,
-        train_models,
-    )
-    from frontend.streamlit_app.services import weather_pipeline  # type: ignore
-
-    def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
-        return pd.DataFrame()
-    def save_weather_profile(profile: dict) -> None:  # type: ignore[misc]
-        pass
-    def load_weather_profile() -> dict:  # type: ignore[misc]
-        return {"lat": weather_pipeline.DEFAULT_LAT, "lon": weather_pipeline.DEFAULT_LON}
+from frontend.streamlit_app.services.data_utils import (
+    WEATHER_SCENARIOS,
+    build_scenario_forecast,
+    load_enriched_data,
+    load_pos_log,
+    load_weather_profile,
+    save_weather_profile,
+    train_models,
+)
+from frontend.streamlit_app.services import weather_pipeline
 
 PAGE_ICON = get_logo_path() or "💪"
 st.set_page_config(
@@ -214,6 +195,171 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
     )
     st.plotly_chart(fig, use_container_width=True)
 
+
+def _latest_stock_reading() -> Optional[float]:
+    """Fetch the most recent stock reading from the POS log if available."""
+    try:
+        log_df = load_pos_log()
+    except Exception:
+        return None
+    if log_df.empty or "stock_remaining" not in log_df.columns:
+        return None
+    sorted_log = (
+        log_df.sort_values("timestamp", ascending=False)["stock_remaining"]
+        .pipe(pd.to_numeric, errors="coerce")
+        .dropna()
+    )
+    if sorted_log.empty:
+        return None
+    return float(sorted_log.iloc[0])
+
+
+def _estimate_daily_demand(history: pd.DataFrame, forecast: pd.DataFrame) -> float:
+    """Use historical + forecast data to approximate daily snack demand."""
+    if not history.empty:
+        daily_usage = (
+            history.resample("D", on="timestamp")["snack_units"]
+            .sum()
+            .tail(14)
+        )
+        daily_mean = float(daily_usage.mean()) if not daily_usage.empty else float("nan")
+        if pd.notna(daily_mean) and daily_mean > 0:
+            return daily_mean
+
+    if forecast.empty:
+        return 20.0
+
+    forecast_view = forecast.sort_values("timestamp")[["timestamp", "pred_snack_units"]].copy()
+    freq_seconds = forecast_view["timestamp"].diff().dt.total_seconds().median()
+    freq_hours = freq_seconds / 3600.0 if pd.notna(freq_seconds) and freq_seconds else 1.0
+    hourly_mean = float(forecast_view["pred_snack_units"].mean())
+    estimated_daily = hourly_mean * (24.0 / max(freq_hours, 0.1))
+    return max(5.0, estimated_daily)
+
+
+def render_model_reorder_plan(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
+    st.subheader("Model-driven reorder guidance")
+    if forecast.empty:
+        st.info("Run the scenario forecast above to unlock reorder recommendations.")
+        return
+
+    avg_daily_demand = _estimate_daily_demand(history, forecast)
+    default_stock = max(20.0, round(avg_daily_demand * 3))
+    latest_stock = _latest_stock_reading()
+    if latest_stock is not None:
+        default_stock = float(latest_stock)
+
+    forecast_view = (
+        forecast.sort_values("timestamp")[["timestamp", "pred_snack_units"]]
+        .copy()
+        .assign(pred_snack_units=lambda df_: df_["pred_snack_units"].clip(lower=0).fillna(0))
+    )
+
+    with st.expander("Reorder assumptions", expanded=True):
+        col_a, col_b, col_c = st.columns(3)
+        current_stock = col_a.number_input(
+            "Current stock (units)",
+            min_value=0.0,
+            value=float(default_stock),
+            step=5.0,
+            help="Auto-filled from the latest POS entry when available.",
+        )
+        safety_days = col_b.slider(
+            "Safety stock (days of demand)",
+            min_value=0.0,
+            max_value=5.0,
+            value=1.0,
+            step=0.5,
+            help="We will trigger a reorder before the projected stock drops below this buffer.",
+        )
+        reorder_lot = col_c.number_input(
+            "Preferred reorder lot (units)",
+            min_value=0.0,
+            value=float(max(10.0, round(avg_daily_demand))),
+            step=5.0,
+        )
+
+    safety_units = safety_days * avg_daily_demand
+    forecast_view["cumulative_units"] = forecast_view["pred_snack_units"].cumsum()
+    forecast_view["projected_stock"] = current_stock - forecast_view["cumulative_units"]
+
+    reorder_ts: Optional[pd.Timestamp] = None
+    if current_stock <= safety_units:
+        reorder_ts = pd.Timestamp.now()
+    else:
+        below_buffer = forecast_view["projected_stock"] <= safety_units
+        if below_buffer.any():
+            reorder_ts = forecast_view.loc[below_buffer, "timestamp"].iloc[0]
+
+    depletion_ts: Optional[pd.Timestamp] = None
+    below_zero = forecast_view["projected_stock"] <= 0
+    if below_zero.any():
+        depletion_ts = forecast_view.loc[below_zero, "timestamp"].iloc[0]
+
+    def _format_eta(target: Optional[pd.Timestamp]) -> str:
+        if target is None:
+            return "n/a"
+        eta_hours = (target - pd.Timestamp.now()).total_seconds() / 3600.0
+        if eta_hours < 0:
+            return "due"
+        return f"in {eta_hours:.1f} h"
+
+    col1, col2, col3 = st.columns(3)
+    if reorder_ts is not None:
+        col1.metric("Next reorder target", reorder_ts.strftime("%a %H:%M"), _format_eta(reorder_ts))
+    else:
+        col1.metric("Next reorder target", "Beyond forecast", "extend horizon")
+    if depletion_ts is not None:
+        col2.metric("Projected stockout", depletion_ts.strftime("%a %H:%M"), _format_eta(depletion_ts))
+    else:
+        col2.metric("Projected stockout", "Outside horizon", "buffer sufficient")
+    projected_floor = float(forecast_view["projected_stock"].min()) if not forecast_view.empty else float("nan")
+    col3.metric(
+        "Min projected stock",
+        f"{projected_floor:.0f} units",
+        f"Safety floor {safety_units:.0f}u",
+    )
+
+    if reorder_ts is not None:
+        st.success(
+            f"Plan to reorder ~{reorder_lot:.0f} units by **{reorder_ts.strftime('%Y-%m-%d %H:%M')}** "
+            f"before the forecast dips below the {safety_units:.0f} unit buffer."
+        )
+    else:
+        st.info(
+            "The current forecast horizon never touches the safety buffer. Increase the horizon or lower "
+            "the buffer if you need a nearer recommendation."
+        )
+
+    stock_chart = px.area(
+        forecast_view,
+        x="timestamp",
+        y="projected_stock",
+        title="Projected stock vs. safety buffer",
+        labels={"projected_stock": "Projected stock (units)"},
+    )
+    stock_chart.add_hline(
+        y=safety_units,
+        line_dash="dash",
+        line_color="#E74C3C",
+        annotation_text=f"Safety floor ({safety_units:.0f})",
+        annotation_position="bottom left",
+    )
+    stock_chart.update_traces(line_shape="hv")
+    st.plotly_chart(stock_chart, use_container_width=True)
+
+    st.dataframe(
+        forecast_view[["timestamp", "pred_snack_units", "projected_stock"]].rename(
+            columns={
+                "timestamp": "Time",
+                "pred_snack_units": "Predicted sales",
+                "projected_stock": "Projected stock",
+            }
+        ),
+        use_container_width=True,
+        height=260,
+    )
+
     kpi_cols = st.columns(3)
     kpi_cols[0].metric(
         "Forecast check-ins",
@@ -256,176 +402,6 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
         .set_index("timestamp"),
         use_container_width=True,
     )
-
-
-def render_inventory_game(df: pd.DataFrame) -> None:
-    st.subheader("Inventory sandbox")
-    daily_usage = (
-        df.resample("D", on="timestamp")["snack_units"]
-        .sum()
-        .reset_index()
-        .rename(columns={"snack_units": "daily_snacks"})
-    )
-    if daily_usage.empty:
-        st.info("Not enough data to simulate inventory yet.")
-        return
-
-    avg_daily = float(daily_usage["daily_snacks"].mean()) if not daily_usage.empty else 10.0
-    default_start = max(10.0, round(avg_daily * 4, 1))
-    with st.expander("Game controls", expanded=True):
-        col_left, col_right = st.columns(2)
-        with col_left:
-            start_stock = st.number_input(
-                "Starting stock (units)", min_value=0.0, value=default_start, step=10.0
-            )
-            reorder_days = st.slider(
-                "Reorder coverage (days)",
-                min_value=1,
-                max_value=14,
-                value=3,
-                key="inventory_reorder_days",
-                help="How many days of demand you want on hand before triggering a new order.",
-            )
-        with col_right:
-            reorder_amount = st.number_input(
-                "Reorder amount",
-                min_value=0.0,
-                value=max(10.0, round(avg_daily * 2, 1)),
-                step=5.0,
-            )
-
-        low_threshold_key = "inventory_low_threshold"
-        recommended_threshold = max(5.0, round(avg_daily * reorder_days, 1))
-        if low_threshold_key not in st.session_state:
-            st.session_state[low_threshold_key] = recommended_threshold
-        last_reorder_days = st.session_state.get("_inventory_last_reorder_days")
-        if last_reorder_days != reorder_days:
-            st.session_state["_inventory_last_reorder_days"] = reorder_days
-            st.session_state[low_threshold_key] = recommended_threshold
-
-        low_threshold = st.number_input(
-            "Low-stock alert threshold",
-            min_value=0.0,
-            value=st.session_state[low_threshold_key],
-            key=low_threshold_key,
-            help="Auto-updated from reorder coverage; tweak if you need extra buffer.",
-        )
-        st.caption(
-            f"Recommended reorder point: {recommended_threshold:.0f} units "
-            f"(avg {avg_daily:.1f}/day × {reorder_days} days)."
-        )
-
-        col_a, col_b = st.columns(2)
-        if col_a.button("Reset inventory game"):
-            st.session_state["stock_level"] = start_stock
-            st.session_state["stock_day_idx"] = 0
-            st.session_state["stock_history"] = []
-            st.rerun()
-        if col_b.button("Reorder now"):
-            st.session_state["stock_level"] = st.session_state.get("stock_level", start_stock) + reorder_amount
-            st.rerun()
-
-    if "stock_level" not in st.session_state:
-        st.session_state["stock_level"] = start_stock
-    if "stock_day_idx" not in st.session_state:
-        st.session_state["stock_day_idx"] = 0
-    if "stock_history" not in st.session_state:
-        st.session_state["stock_history"] = []
-
-    idx = st.session_state["stock_day_idx"] % len(daily_usage)
-    current_day = daily_usage.iloc[idx]
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Simulated date", str(current_day["timestamp"].date()))
-    col2.metric("Stock level", f"{st.session_state['stock_level']:.0f} units")
-    col3.metric("Projected demand", f"{current_day['daily_snacks']:.0f} units")
-
-    if st.session_state["stock_level"] <= low_threshold:
-        st.warning("Low stock! Consider reordering before the next day.")
-
-    if st.button("Next day ➡️"):
-        st.session_state["stock_level"] = max(
-            0.0, st.session_state["stock_level"] - current_day["daily_snacks"]
-        )
-        st.session_state["stock_history"].append(
-            {
-                "date": current_day["timestamp"].date(),
-                "stock_end": st.session_state["stock_level"],
-                "consumption": current_day["daily_snacks"],
-            }
-        )
-        st.session_state["stock_day_idx"] = (idx + 1) % len(daily_usage)
-        st.rerun()
-
-    if st.session_state["stock_history"]:
-        hist_df = pd.DataFrame(st.session_state["stock_history"])
-        stock_fig = px.line(hist_df, x="date", y="stock_end", title="Stock level over simulated days")
-        stock_fig.update_traces(mode="lines+markers")
-        stock_fig.add_hrect(
-            y0=0,
-            y1=low_threshold,
-            fillcolor="rgba(231,76,60,0.12)",
-            line_width=0,
-            annotation_text="Low stock zone",
-            annotation_position="top left",
-        )
-        stock_fig.add_hline(
-            y=low_threshold,
-            line_dash="dash",
-            line_color="#E74C3C",
-            annotation_text=f"Threshold ({low_threshold:.0f})",
-            annotation_position="bottom right",
-        )
-        st.plotly_chart(stock_fig, use_container_width=True)
-
-
-def render_procurement_panel() -> None:
-    st.subheader("Procurement autopilot plan")
-    plan_df = load_procurement_plan()
-    if plan_df.empty:
-        st.info("No procurement plan generated yet. Run the autopilot simulation on Home to populate this view.")
-        return
-
-    plan_df = plan_df.copy()
-    plan_df["date"] = pd.to_datetime(plan_df["date"])
-    today = pd.Timestamp.now().normalize()
-    future = plan_df[plan_df["date"] >= today]
-    meta_cols = [col for col in plan_df.columns if col.startswith("plan_")]
-    plan_meta = {col.replace("plan_", ""): plan_df[col].iloc[0] for col in meta_cols} if meta_cols else {}
-    table_df = plan_df.drop(columns=meta_cols, errors="ignore")
-
-    col_a, col_b = st.columns(2)
-    if "profit" in plan_df.columns:
-        col_a.metric("Plan profit outlook", f"CHF{plan_df['profit'].sum():.0f}")
-    if "stock_after" in plan_df.columns:
-        col_b.metric("Ending stock", f"{plan_df['stock_after'].iloc[-1]:.0f} units")
-
-    if "plan_generated_at" in plan_df.columns:
-        st.caption(f"Plan generated at {plan_df['plan_generated_at'].iloc[0]}")
-    if plan_meta:
-        st.markdown(
-            "**Plan assumptions**  \n"
-            f"- Weather: **{plan_meta.get('weather_pattern', 'n/a')}**  \n"
-            f"- Price Δ: {plan_meta.get('price_change_pct', '0')}% · Strategy Δ: {plan_meta.get('price_strategy_pct', '0')}%  \n"
-            f"- Unit cost: CHF{plan_meta.get('unit_cost', 'n/a')} · Fee: CHF{plan_meta.get('fee', 'n/a')}  \n"
-            f"- Horizon: {plan_meta.get('horizon_days', '?')} d · Safety stock: {plan_meta.get('safety_stock', '?')} units",
-        )
-
-    if {"reordered", "reorder_qty"}.issubset(plan_df.columns):
-        upcoming = future[future["reordered"] == "Yes"]
-        if not upcoming.empty:
-            next_row = upcoming.iloc[0]
-            st.success(
-                f"Next reorder on **{next_row['date'].strftime('%Y-%m-%d')}** · {next_row['reorder_qty']:.0f} units."
-            )
-    columns_to_show = (
-        ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
-        if {"scenario", "reorder_qty"}.issubset(table_df.columns)
-        else list(table_df.columns)
-    )
-    st.dataframe(table_df.head(30)[columns_to_show], use_container_width=True, height=320)
-
-
 def render_dashboard() -> None:
     render_top_nav("1_Dashboard.py", show_logo=False)
     st.title("Refuel Performance Cockpit")
@@ -531,8 +507,7 @@ def render_dashboard() -> None:
     forecast_df = build_scenario_forecast(data, models, scenario)
     st.subheader("What-if forecast")
     render_forecast_section(data, forecast_df)
-    render_inventory_game(data)
-    render_procurement_panel()
+    render_model_reorder_plan(data, forecast_df)
     render_footer()
 
 

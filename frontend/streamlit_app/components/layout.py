@@ -22,12 +22,12 @@ DEFAULT_NAV: List[NavItem] = [
     NavItem("Home", "🏠", "Home.py"),
     NavItem("Dashboard", "📊", "pages/1_Dashboard.py"),
     NavItem("Forecasts", "🔮", "pages/2_Forecasts.py"),
-    NavItem("What-if Lab", "🧪", "pages/3_WhatIf_Sim.py"),
     NavItem("Data Editor", "📝", "pages/4_Data_Editor.py"),
     NavItem("POS Console", "🧾", "pages/7_POS_Console.py"),
     NavItem("Price Manager", "💲", "pages/8_Price_Manager.py"),
-    NavItem("Settings", "⚙️", "pages/5_Settings_APIs.py"),
     NavItem("Statistics", "📈", "pages/6_Statistics.py"),
+    NavItem("What-if Lab", "🧪", "pages/3_WhatIf_Sim.py"),
+    NavItem("Settings", "⚙️", "pages/5_Settings_APIs.py"),
 ]
 
 
@@ -41,6 +41,7 @@ def render_top_nav(
         "<style>[data-testid='stSidebarNav']{display:none !important;}</style>",
         unsafe_allow_html=True,
     )
+    _inject_theme_css()
     ctx = get_script_run_ctx()
     if ctx is None:
         return
@@ -53,6 +54,7 @@ def render_top_nav(
                 return page
         return None
 
+    st.markdown("<div class='refuel-top-nav'>", unsafe_allow_html=True)
     if logo_bytes:
         wrapper_cols = st.columns([0.2, 0.8])
         wrapper_cols[0].image(logo_bytes, width=90)
@@ -64,13 +66,19 @@ def render_top_nav(
         page_meta = lookup(item.path)
         if not page_meta:
             continue
-        label = f"{item.emoji} {item.label}"
         with col:
+            label = f"{item.emoji} {item.label}"
             if item.path.endswith(active_page):
-                st.button(label, disabled=True, use_container_width=True)
+                st.button(
+                    label=label,
+                    disabled=True,
+                    use_container_width=True,
+                    key=f"nav-active-{item.path}",
+                )
             else:
                 if st.button(label, key=f"nav-{item.path}", use_container_width=True):
                     st.switch_page(item.path)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 LOGO_CANDIDATES = [
@@ -110,7 +118,66 @@ def sidebar_info_block() -> None:
 
 def render_footer() -> None:
     st.markdown("---")
-    st.markdown("University of St. Gallen (HSG) · Alice · Marie · Benjamin · Solal · Tristan")
+    st.markdown("[University of St. Gallen (HSG)](https://www.unisg.ch/en/) · Alice · Marie · Benjamin · Solal · Tristan")
+
+
+def _inject_theme_css() -> None:
+    key = "_refuel_theme_css"
+    if st.session_state.get(key):
+        return
+    st.markdown(
+        """
+        <style>
+        :root {
+            --refuel-primary: #1f6f8b;
+            --refuel-surface: #f6f9fc;
+            --refuel-text: #1c2a3a;
+            --refuel-pill-bg: #eef3f8;
+            --refuel-pill-fg: #1c2a3a;
+            --refuel-pill-border: #d1dbe8;
+        }
+        body, .stApp {
+            background-color: var(--refuel-surface);
+            color: var(--refuel-text);
+        }
+        .refuel-top-nav div[data-testid="column"] {
+            flex: 0 0 auto !important;
+        }
+        .refuel-top-nav div[data-testid="stButton"] > button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-width: 120px;
+            margin: 0 6px 8px 0 !important;
+            height: 64px;
+            background-color: var(--refuel-pill-bg);
+            color: var(--refuel-pill-fg);
+            border: 1px solid var(--refuel-pill-border);
+            border-radius: 18px;
+            box-shadow: none;
+            width: auto;
+        }
+        .refuel-top-nav div[data-testid="stButton"] > button span {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+        .refuel-top-nav div[data-testid="stButton"] > button:hover:not(:disabled) {
+            border-color: var(--refuel-primary);
+            color: var(--refuel-primary);
+        }
+        .refuel-top-nav div[data-testid="stButton"] > button:disabled {
+            background-color: var(--refuel-primary);
+            color: #ffffff;
+            border-color: var(--refuel-primary);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.session_state[key] = True
 
 
 def _ensure_tooltip_css() -> None:

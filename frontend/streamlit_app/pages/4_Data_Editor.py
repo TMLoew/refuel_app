@@ -24,6 +24,13 @@ render_top_nav("4_Data_Editor.py")
 st.title("Data Workbench")
 st.caption("Inspect, annotate, and experiment with the telemetry tables feeding the dashboards.")
 
+st.subheader("Upload replacement data")
+uploaded = st.file_uploader("Drop a new `gym_badges.csv` to preview it instantly", type=["csv"])
+if uploaded:
+    new_df = pd.read_csv(uploaded)
+    st.success(f"Loaded {len(new_df)} rows from your upload. Replace `{DATA_FILE}` manually to use this dataset.")
+    st.dataframe(new_df.head(20), use_container_width=True)
+
 with st.sidebar:
     sidebar_info_block()
     st.subheader("Filters")
@@ -67,14 +74,4 @@ st.download_button(
     mime="text/csv",
 )
 
-with st.expander("Summary stats", expanded=True):
-    summary = data.describe()[["checkins", "snack_units", "snack_revenue", "temperature_c"]]
-    st.dataframe(summary, use_container_width=True)
-
-st.subheader("Upload replacement data")
-uploaded = st.file_uploader("Upload new `gym_badges.csv`", type=["csv"])
-if uploaded:
-    new_df = pd.read_csv(uploaded)
-    st.success(f"Loaded {len(new_df)} rows. Replace `{DATA_FILE}` manually to use this dataset.")
-    st.dataframe(new_df.head(20), use_container_width=True)
 render_footer()

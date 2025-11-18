@@ -24,7 +24,6 @@ try:
     from frontend.streamlit_app.services.data_utils import (
         load_enriched_data,
         load_pos_log,
-        load_procurement_plan,
         load_weather_profile,
         save_weather_profile,
         build_scenario_forecast,
@@ -32,13 +31,9 @@ try:
         save_procurement_plan,
         WEATHER_SCENARIOS,
     )
-except ImportError as import_exc:
-    if "load_procurement_plan" not in str(import_exc):
-        raise
+except ImportError:
     from frontend.streamlit_app.services.data_utils import load_enriched_data, load_pos_log  # type: ignore
 
-    def load_procurement_plan() -> pd.DataFrame:  # type: ignore[misc]
-        return pd.DataFrame()
     def load_weather_profile() -> dict:  # type: ignore[misc]
         return {"lat": 47.4239, "lon": 9.3748, "api_timeout": 10, "cache_hours": 6}
     def save_weather_profile(profile: dict) -> None:  # type: ignore[misc]
@@ -559,47 +554,6 @@ webhooks = [
     {"name": "Marketing automation", "status": "paused", "last_event": "3 days ago"},
 ]
 st.table(webhooks)
-
-st.subheader("Procurement plan snapshot")
-plan_df = load_procurement_plan()
-if plan_df.empty:
-    st.info("No procurement plan saved yet. Unlock the autopilot panel below to generate one.")
-else:
-    plan_df = plan_df.copy()
-    plan_df["date"] = pd.to_datetime(plan_df["date"])
-    today = pd.Timestamp.now().normalize()
-    future = plan_df[plan_df["date"] >= today]
-    meta_cols = [col for col in plan_df.columns if col.startswith("plan_")]
-    plan_meta = {col.replace("plan_", ""): plan_df[col].iloc[0] for col in meta_cols} if meta_cols else {}
-    table_df = plan_df.drop(columns=meta_cols, errors="ignore")
-    metrics = st.columns(3)
-    if "profit" in plan_df.columns:
-        metrics[0].metric("Projected profit", f"CHF{plan_df['profit'].sum():.0f}")
-    if "reordered" in plan_df.columns:
-        metrics[1].metric("Reorders planned", int((plan_df["reordered"] == "Yes").sum()))
-    if "stock_after" in plan_df.columns:
-        metrics[2].metric("Ending stock", f"{plan_df['stock_after'].iloc[-1]:.0f} units")
-    if "plan_generated_at" in plan_df.columns:
-        st.caption(f"Plan generated at {plan_df['plan_generated_at'].iloc[0]}")
-    if plan_meta:
-        st.markdown(
-            "**Plan assumptions**  \n"
-            f"- Weather: **{plan_meta.get('weather_pattern', 'n/a')}**  \n"
-            f"- Pricing Δ: {plan_meta.get('price_change_pct', '0')}% · Strategy Δ: {plan_meta.get('price_strategy_pct', '0')}%  \n"
-            f"- Unit cost: CHF{plan_meta.get('unit_cost', 'n/a')} · Fee: CHF{plan_meta.get('fee', 'n/a')}  \n"
-            f"- Horizon: {plan_meta.get('horizon_days', '?')} d · Safety stock: {plan_meta.get('safety_stock', '?')} units",
-        )
-    if {"reordered", "reorder_qty"}.issubset(plan_df.columns):
-        upcoming = future[future["reordered"] == "Yes"]
-        if not upcoming.empty:
-            next_row = upcoming.iloc[0]
-            st.success(f"Next reorder {next_row['date'].strftime('%Y-%m-%d')} · {next_row['reorder_qty']:.0f} units.")
-    columns_to_show = (
-        ["date", "scenario", "price", "demand_est", "sold", "stock_after", "reordered", "reorder_qty", "profit"]
-        if {"scenario", "reorder_qty"}.issubset(table_df.columns)
-        else list(table_df.columns)
-    )
-    st.dataframe(table_df.head(25)[columns_to_show], use_container_width=True, height=300)
 
 st.subheader("Export settings")
 export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon)}, indent=2)

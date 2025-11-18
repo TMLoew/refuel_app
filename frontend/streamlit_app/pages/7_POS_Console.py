@@ -371,25 +371,29 @@ else:
             )
         with compare_cols[1]:
             if not log_df.empty:
-                merged = pd.merge_asof(
-                    log_df.sort_values("timestamp"),
-                    forecast[["timestamp", "pred_snack_units", "pred_checkins"]].sort_values("timestamp"),
-                    on="timestamp",
-                    direction="nearest",
-                    tolerance=pd.Timedelta("2h"),
-                )
-                merged = merged.dropna(subset=["pred_snack_units"])
-                if not merged.empty:
-                    err_fig = px.bar(
-                        merged.tail(20),
-                        x="timestamp",
-                        y=["sales_units", "pred_snack_units"],
-                        barmode="group",
-                        title="Logged vs. forecast snacks",
-                    )
-                    st.plotly_chart(err_fig, use_container_width=True)
+                aligned_log = log_df.dropna(subset=["timestamp"]).sort_values("timestamp")
+                if aligned_log.empty:
+                    st.info("All POS entries are missing timestamps, so comparison is unavailable.")
                 else:
-                    st.info("Log entries are too far from the forecast horizon to compare.")
+                    merged = pd.merge_asof(
+                        aligned_log,
+                        forecast[["timestamp", "pred_snack_units", "pred_checkins"]].sort_values("timestamp"),
+                        on="timestamp",
+                        direction="nearest",
+                        tolerance=pd.Timedelta("2h"),
+                    )
+                    merged = merged.dropna(subset=["pred_snack_units"])
+                    if not merged.empty:
+                        err_fig = px.bar(
+                            merged.tail(20),
+                            x="timestamp",
+                            y=["sales_units", "pred_snack_units"],
+                            barmode="group",
+                            title="Logged vs. forecast snacks",
+                        )
+                        st.plotly_chart(err_fig, use_container_width=True)
+                    else:
+                        st.info("Log entries are too far from the forecast horizon to compare.")
             else:
                 st.info("Need at least one POS entry to compare actual vs. forecast.")
 

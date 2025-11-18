@@ -1,0 +1,7 @@
+{
+  "auto_enabled": true,
+  "threshold_units": 50,
+  "lot_size": 100,
+  "cooldown_hours": 6,
+  "last_auto_restock": null
+}
