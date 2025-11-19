@@ -96,12 +96,12 @@ python backend/app/services/pipeline.py
 
 We follow the HSG color scheme across the UI and charts:
 
-| Swatch | Hex |
-|--------|-----|
-| HSG Grün | `#00802F` |
-| Rot | `#EB6969` |
-| Blau | `#73A5AF` |
-| Beige | `#E1D7C3` |
-| Gelb | `#FFF04B` |
+| Swatch | Hex | Preview |
+|--------|-----|---------|
+| HSG Grün | `#00802F` | ![#00802F](https://via.placeholder.com/20/00802F/00802F) |
+| Rot | `#EB6969` | ![#EB6969](https://via.placeholder.com/20/EB6969/EB6969) |
+| Blau | `#73A5AF` | ![#73A5AF](https://via.placeholder.com/20/73A5AF/73A5AF) |
+| Beige | `#E1D7C3` | ![#E1D7C3](https://via.placeholder.com/20/E1D7C3/E1D7C3) |
+| Gelb | `#FFF04B` | ![#FFF04B](https://via.placeholder.com/20/FFF04B/FFF04B) |
 
 The custom Plotly template and navigation pills use these values (plus darker accents) so the product, dashboard charts, and marketing assets all share a consistent look.
