@@ -18,6 +18,12 @@ from frontend.streamlit_app.components.layout import (
     sidebar_info_block,
     render_footer,
     get_logo_path,
+    PRIMARY_GREEN,
+    CORAL,
+    TEAL,
+    YELLOW,
+    DEEP_GREEN,
+    SAND,
 )
 try:
     from frontend.streamlit_app.components.layout import hover_tip
@@ -71,7 +77,7 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
             y=history_window["checkins"],
             mode="lines",
             name="Check-ins",
-            line=dict(color="#2E86AB"),
+            line=dict(color=PRIMARY_GREEN, width=2),
         )
     )
     usage_fig.add_trace(
@@ -81,7 +87,7 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
             mode="lines",
             name="Snack units",
             yaxis="y2",
-            line=dict(color="#F18F01"),
+            line=dict(color=CORAL, width=2),
         )
     )
     usage_fig.update_layout(
@@ -99,6 +105,7 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
         y=["temperature_c", "precipitation_mm"],
         title="Weather trend (synthetic blend)",
         labels={"value": "Value", "variable": "Metric"},
+        color_discrete_map={"temperature_c": TEAL, "precipitation_mm": YELLOW},
     )
     weather_fig.update_layout(height=380, legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
@@ -140,7 +147,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["actual_checkins"],
             mode="lines",
             name="Actual check-ins",
-            line=dict(color="#2E86AB"),
+            line=dict(color=PRIMARY_GREEN, width=2),
         )
     )
     fig.add_trace(
@@ -149,7 +156,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["pred_checkins"],
             mode="lines",
             name="Forecast check-ins",
-            line=dict(color="#2E86AB", dash="dash"),
+            line=dict(color=DEEP_GREEN, dash="dash", width=2),
         )
     )
     fig.add_trace(
@@ -158,7 +165,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["actual_snacks"],
             mode="lines",
             name="Actual snack units",
-            line=dict(color="#F18F01"),
+            line=dict(color=CORAL, width=2),
             yaxis="y2",
         )
     )
@@ -168,7 +175,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["pred_snack_units"],
             mode="lines",
             name="Forecast snack units",
-            line=dict(color="#F18F01", dash="dash"),
+            line=dict(color=YELLOW, dash="dash", width=2),
             yaxis="y2",
         )
     )
@@ -188,7 +195,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
                 x1=forecast["timestamp"].max(),
                 y0=0,
                 y1=1,
-                fillcolor="rgba(200,200,200,0.15)",
+                fillcolor="rgba(230,216,192,0.3)",
                 line=dict(width=0),
             )
         ],
@@ -341,7 +348,7 @@ def render_model_reorder_plan(history: pd.DataFrame, forecast: pd.DataFrame) -> 
     stock_chart.add_hline(
         y=safety_units,
         line_dash="dash",
-        line_color="#E74C3C",
+        line_color=CORAL,
         annotation_text=f"Safety floor ({safety_units:.0f})",
         annotation_position="bottom left",
     )

@@ -16,6 +16,8 @@ from frontend.streamlit_app.components.layout import (
     sidebar_info_block,
     render_footer,
     get_logo_path,
+    PRIMARY_GREEN,
+    CORAL,
 )
 try:
     from frontend.streamlit_app.components.layout import hover_tip
@@ -68,7 +70,7 @@ corr_fig = px.imshow(
     corr_matrix,
     text_auto=".2f",
     aspect="auto",
-    color_continuous_scale="RdBu",
+    color_continuous_scale=[CORAL, "#FFFFFF", PRIMARY_GREEN],
     title="Pearson correlation matrix",
 )
 st.plotly_chart(corr_fig, use_container_width=True)

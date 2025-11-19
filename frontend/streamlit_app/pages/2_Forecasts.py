@@ -18,6 +18,10 @@ from frontend.streamlit_app.components.layout import (
     sidebar_info_block,
     render_footer,
     get_logo_path,
+    PRIMARY_GREEN,
+    DEEP_GREEN,
+    CORAL,
+    YELLOW,
 )
 try:
     from frontend.streamlit_app.components.layout import hover_tip
@@ -149,7 +153,7 @@ else:
             y=combined["actual_checkins"],
             mode="lines",
             name="Actual check-ins",
-            line=dict(color="#2E86AB"),
+            line=dict(color=PRIMARY_GREEN, width=2),
         )
     )
     forecast_fig.add_trace(
@@ -158,7 +162,7 @@ else:
             y=combined["pred_checkins"],
             mode="lines",
             name="Forecast check-ins",
-            line=dict(color="#2E86AB", dash="dash"),
+            line=dict(color=DEEP_GREEN, dash="dash", width=2),
         )
     )
     forecast_fig.add_trace(
@@ -167,7 +171,7 @@ else:
             y=combined["actual_snacks"],
             mode="lines",
             name="Actual snack units",
-            line=dict(color="#F18F01"),
+            line=dict(color=CORAL, width=2),
             yaxis="y2",
         )
     )
@@ -177,7 +181,7 @@ else:
             y=combined["pred_snack_units"],
             mode="lines",
             name="Forecast snack units",
-            line=dict(color="#F18F01", dash="dash"),
+            line=dict(color=YELLOW, dash="dash", width=2),
             yaxis="y2",
         )
     )
@@ -196,7 +200,7 @@ else:
                 x1=forecast_df["timestamp"].max(),
                 y0=0,
                 y1=1,
-                fillcolor="rgba(46,134,171,0.08)",
+                fillcolor="rgba(11,122,31,0.08)",
                 line=dict(width=0),
             )
         ],

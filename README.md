@@ -91,3 +91,17 @@ python backend/app/services/pipeline.py
 
 - **Streamlit Cloud**: https://refuelapp.streamlit.app/
 - **Issues/feedback**: please use GitHub Issues in this repo.
+
+## Brand Palette
+
+We follow the HSG color scheme across the UI and charts:
+
+| Swatch | Hex |
+|--------|-----|
+| HSG Grün | `#00802F` |
+| Rot | `#EB6969` |
+| Blau | `#73A5AF` |
+| Beige | `#E1D7C3` |
+| Gelb | `#FFF04B` |
+
+The custom Plotly template and navigation pills use these values (plus darker accents) so the product, dashboard charts, and marketing assets all share a consistent look.

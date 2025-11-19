@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional
+import html
 
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
@@ -52,7 +54,9 @@ refuel_template = go.layout.Template(
         ),
     )
 )
-px.defaults.template = refuel_template
+pio.templates["refuel"] = refuel_template
+pio.templates.default = "refuel"
+px.defaults.template = "refuel"
 
 
 @dataclass(frozen=True)
@@ -238,42 +242,13 @@ def _ensure_tooltip_css() -> None:
         """
         <style>
         .tooltip-badge {
-            position: relative;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
             cursor: help;
-            color: #555;
             font-size: 0.9rem;
-            border-bottom: 1px dotted #888;
+            border-bottom: 1px dotted var(--refuel-pill-border, #0b5b2c);
             margin-left: 6px;
-        }
-        .tooltip-badge .tooltip-content {
-            visibility: hidden;
-            width: 280px;
-            background-color: #262730;
-            color: #fff;
-            text-align: left;
-            border-radius: 6px;
-            padding: 8px 10px;
-            position: absolute;
-            z-index: 10;
-            bottom: 125%;
-            left: 0;
-            opacity: 0;
-            transition: opacity 0.2s;
-            font-size: 0.8rem;
-        }
-        .tooltip-badge .tooltip-content::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 12px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #262730 transparent transparent transparent;
-        }
-        .tooltip-badge:hover .tooltip-content {
-            visibility: visible;
-            opacity: 1;
+            color: var(--refuel-text, #0b1f1a);
         }
         </style>
         """,
@@ -285,5 +260,7 @@ def _ensure_tooltip_css() -> None:
 def hover_tip(label: str, tooltip: str) -> None:
     """Render a reusable hover tooltip badge."""
     _ensure_tooltip_css()
-    html = f'<span class="tooltip-badge">{label}<span class="tooltip-content">{tooltip}</span></span>'
-    st.markdown(html, unsafe_allow_html=True)
+    safe_label = html.escape(label)
+    safe_tip = html.escape(tooltip)
+    html_snippet = f'<span class="tooltip-badge" title="{safe_tip}">{safe_label}</span>'
+    st.markdown(html_snippet, unsafe_allow_html=True)
