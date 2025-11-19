@@ -8,19 +8,51 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-px.defaults.template = "plotly_white"
-px.defaults.color_discrete_sequence = [
-    "#0B7A1F",  # primary green
-    "#E97874",  # coral
-    "#78A7B2",  # muted teal
-    "#F7E24B",  # bright yellow
-    "#0B5B2C",  # deep green
-    "#000000",  # black
-]
-px.defaults.color_continuous_scale = ["#E6D8C0", "#0B7A1F"]
+PRIMARY_GREEN = "#0B7A1F"
+DEEP_GREEN = "#0B5B2C"
+CORAL = "#E97874"
+TEAL = "#78A7B2"
+YELLOW = "#F7E24B"
+SAND = "#E6D8C0"
+INK = "#0B1F1A"
+
+px.defaults.color_discrete_sequence = [PRIMARY_GREEN, CORAL, TEAL, YELLOW, DEEP_GREEN, "#000000"]
+px.defaults.color_continuous_scale = [SAND, PRIMARY_GREEN]
+
+refuel_template = go.layout.Template(
+    layout=dict(
+        font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=INK),
+        title=dict(font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=INK)),
+        colorway=px.defaults.color_discrete_sequence,
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+        xaxis=dict(
+            gridcolor=SAND,
+            zerolinecolor=SAND,
+            linecolor=DEEP_GREEN,
+            titlefont=dict(color=INK),
+            tickfont=dict(color=INK),
+        ),
+        yaxis=dict(
+            gridcolor=SAND,
+            zerolinecolor=SAND,
+            linecolor=DEEP_GREEN,
+            titlefont=dict(color=INK),
+            tickfont=dict(color=INK),
+        ),
+        legend=dict(
+            bgcolor="#FFFFFF",
+            bordercolor=SAND,
+            borderwidth=0.5,
+            font=dict(color=INK),
+        ),
+    )
+)
+px.defaults.template = refuel_template
 
 
 @dataclass(frozen=True)
@@ -138,18 +170,18 @@ def _inject_theme_css() -> None:
     if st.session_state.get(key):
         return
     st.markdown(
-        """
+        f"""
         <style>
         :root {
-            --refuel-primary: #0b7a1f;
+            --refuel-primary: {PRIMARY_GREEN};
             --refuel-surface: #ffffff;
-            --refuel-text: #0b1f1a;
-            --refuel-pill-bg: #e6d8c0;
-            --refuel-pill-fg: #0b1f1a;
-            --refuel-pill-border: #0b5b2c;
-            --refuel-accent-coral: #e97874;
-            --refuel-accent-teal: #78a7b2;
-            --refuel-accent-yellow: #f7e24b;
+            --refuel-text: {INK};
+            --refuel-pill-bg: {SAND};
+            --refuel-pill-fg: {INK};
+            --refuel-pill-border: {DEEP_GREEN};
+            --refuel-accent-coral: {CORAL};
+            --refuel-accent-teal: {TEAL};
+            --refuel-accent-yellow: {YELLOW};
         }
         body, .stApp, div, span, label, button {
             font-family: "Gill Sans", "Gill Sans MT", Calibri, "Trebuchet MS", sans-serif !important;
