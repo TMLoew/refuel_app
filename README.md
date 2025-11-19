@@ -98,10 +98,10 @@ We follow the HSG color scheme across the UI and charts:
 
 | Swatch | Hex | Preview |
 |--------|-----|---------|
-| HSG Grün | `#00802F` | ![#00802F](https://via.placeholder.com/20/00802F/00802F) |
-| Rot | `#EB6969` | ![#EB6969](https://via.placeholder.com/20/EB6969/EB6969) |
-| Blau | `#73A5AF` | ![#73A5AF](https://via.placeholder.com/20/73A5AF/73A5AF) |
-| Beige | `#E1D7C3` | ![#E1D7C3](https://via.placeholder.com/20/E1D7C3/E1D7C3) |
-| Gelb | `#FFF04B` | ![#FFF04B](https://via.placeholder.com/20/FFF04B/FFF04B) |
+| HSG Grün | `#00802F` | <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18'><rect width='18' height='18' fill='%2300802F'/></svg>" /> |
+| Rot | `#EB6969` | <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18'><rect width='18' height='18' fill='%23EB6969'/></svg>" /> |
+| Blau | `#73A5AF` | <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18'><rect width='18' height='18' fill='%2373A5AF'/></svg>" /> |
+| Beige | `#E1D7C3` | <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18'><rect width='18' height='18' fill='%23E1D7C3'/></svg>" /> |
+| Gelb | `#FFF04B` | <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18'><rect width='18' height='18' fill='%23FFF04B'/></svg>" /> |
 
 The custom Plotly template and navigation pills use these values (plus darker accents) so the product, dashboard charts, and marketing assets all share a consistent look.
