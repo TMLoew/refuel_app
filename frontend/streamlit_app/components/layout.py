@@ -7,8 +7,20 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional
 
+import plotly.express as px
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+px.defaults.template = "plotly_white"
+px.defaults.color_discrete_sequence = [
+    "#0B7A1F",  # primary green
+    "#E97874",  # coral
+    "#78A7B2",  # muted teal
+    "#F7E24B",  # bright yellow
+    "#0B5B2C",  # deep green
+    "#000000",  # black
+]
+px.defaults.color_continuous_scale = ["#E6D8C0", "#0B7A1F"]
 
 
 @dataclass(frozen=True)
@@ -129,12 +141,18 @@ def _inject_theme_css() -> None:
         """
         <style>
         :root {
-            --refuel-primary: #1f6f8b;
+            --refuel-primary: #0b7a1f;
             --refuel-surface: #ffffff;
-            --refuel-text: #1c2a3a;
-            --refuel-pill-bg: #eef3f8;
-            --refuel-pill-fg: #1c2a3a;
-            --refuel-pill-border: #d1dbe8;
+            --refuel-text: #0b1f1a;
+            --refuel-pill-bg: #e6d8c0;
+            --refuel-pill-fg: #0b1f1a;
+            --refuel-pill-border: #0b5b2c;
+            --refuel-accent-coral: #e97874;
+            --refuel-accent-teal: #78a7b2;
+            --refuel-accent-yellow: #f7e24b;
+        }
+        body, .stApp, div, span, label, button {
+            font-family: "Gill Sans", "Gill Sans MT", Calibri, "Trebuchet MS", sans-serif !important;
         }
         body, .stApp {
             background-color: var(--refuel-surface);
