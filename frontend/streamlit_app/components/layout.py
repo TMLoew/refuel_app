@@ -36,14 +36,14 @@ refuel_template = go.layout.Template(
             gridcolor=SAND,
             zerolinecolor=SAND,
             linecolor=DEEP_GREEN,
-            titlefont=dict(color=INK),
+            title=dict(font=dict(color=INK)),
             tickfont=dict(color=INK),
         ),
         yaxis=dict(
             gridcolor=SAND,
             zerolinecolor=SAND,
             linecolor=DEEP_GREEN,
-            titlefont=dict(color=INK),
+            title=dict(font=dict(color=INK)),
             tickfont=dict(color=INK),
         ),
         legend=dict(
@@ -174,18 +174,18 @@ def _inject_theme_css() -> None:
     if st.session_state.get(key):
         return
     st.markdown(
-        f"""
+        """
         <style>
         :root {
-            --refuel-primary: {PRIMARY_GREEN};
+            --refuel-primary: #0B7A1F;
             --refuel-surface: #ffffff;
-            --refuel-text: {INK};
-            --refuel-pill-bg: {SAND};
-            --refuel-pill-fg: {INK};
-            --refuel-pill-border: {DEEP_GREEN};
-            --refuel-accent-coral: {CORAL};
-            --refuel-accent-teal: {TEAL};
-            --refuel-accent-yellow: {YELLOW};
+            --refuel-text: #0B1F1A;
+            --refuel-pill-bg: #E6D8C0;
+            --refuel-pill-fg: #0B1F1A;
+            --refuel-pill-border: #0B5B2C;
+            --refuel-accent-coral: #E97874;
+            --refuel-accent-teal: #78A7B2;
+            --refuel-accent-yellow: #F7E24B;
         }
         body, .stApp, div, span, label, button {
             font-family: "Gill Sans", "Gill Sans MT", Calibri, "Trebuchet MS", sans-serif !important;
