@@ -67,7 +67,6 @@ class NavItem:
 
 
 DEFAULT_NAV: List[NavItem] = [
-    NavItem("Home", "🏠", "Home.py"),
     NavItem("Dashboard", "📊", "pages/1_Dashboard.py"),
     NavItem("Forecasts", "🔮", "pages/2_Forecasts.py"),
     NavItem("Data Editor", "📝", "pages/4_Data_Editor.py"),
