@@ -145,7 +145,7 @@ def render_history_charts(df: pd.DataFrame) -> None:
     resampled = (
         history_window.set_index("timestamp")
         .resample("60min")
-        .mean()
+        .mean(numeric_only=True)   # ✅ nur numerische Spalten mitteln
         .dropna(subset=["checkins", "snack_units"])
         .reset_index()
     )
