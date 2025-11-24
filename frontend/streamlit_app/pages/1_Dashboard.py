@@ -1,11 +1,8 @@
-from pathlib import Path
+
+# --- Import bootstrap: make this file work from both local runs and Streamlit Cloud ---
 import sys
 from datetime import datetime, timezone
-from typing import Optional
-
-ROOT_DIR = Path(__file__).resolve().parents[3]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -13,18 +10,105 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
-from frontend.streamlit_app.components.layout import (
-    render_top_nav,
-    sidebar_info_block,
-    render_footer,
-    get_logo_path,
-    PRIMARY_GREEN,
-    CORAL,
-    TEAL,
-    YELLOW,
-    DEEP_GREEN,
-    SAND,
-)
+# Try absolute import first, but capture the exception so we can display the real cause if it
+# actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
+try:
+    from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+    from frontend.streamlit_app.services.data_utils import (
+        CHECKIN_FEATURES,
+        SNACK_FEATURES,
+        WEATHER_SCENARIOS,
+        DEFAULT_PRODUCT_PRICE,
+        allocate_product_level_forecast,
+        build_daily_forecast,
+        build_scenario_forecast,
+        build_daily_product_mix_view,
+        compute_daily_actuals,
+        get_product_price_map,
+        get_weather_coordinates,
+        load_enriched_data,
+        load_product_mix_data,
+        load_product_mix_snapshot,
+        load_restock_policy,
+        save_product_mix_snapshot,
+        train_models,
+    )
+    from frontend.streamlit_app.services import weather_pipeline
+except (ModuleNotFoundError, ImportError) as _abs_exc:
+    # Prepare sys.path so that both `frontend.streamlit_app...` and local `components/services`
+    # become importable regardless of whether we are in repo root or app subdir.
+    _this = Path(__file__).resolve()
+
+    # Candidate roots to add to sys.path (most specific first)
+    _candidates = [
+        _this.parent,                       # .../streamlit_app
+        _this.parent.parent,                # .../frontend
+        _this.parent.parent.parent,         # repo root (e.g., .../refuel_app)
+    ]
+    for _p in _candidates:
+        _s = str(_p)
+        if _s not in sys.path:
+            sys.path.insert(0, _s)
+
+    # Also ensure the explicit directories exist for sanity
+    _frontend_dir = _this.parent.parent if (_this.parent.name == 'streamlit_app') else None
+    if _frontend_dir and str(_frontend_dir) not in sys.path:
+        sys.path.insert(0, str(_frontend_dir))
+
+    try:
+        # Retry absolute imports now that paths are primed
+        from frontend.streamlit_app.components.layout import render_top_nav, sidebar_info_block
+        from frontend.streamlit_app.services.data_utils import (
+            CHECKIN_FEATURES,
+            SNACK_FEATURES,
+            WEATHER_SCENARIOS,
+            DEFAULT_PRODUCT_PRICE,
+            allocate_product_level_forecast,
+            build_daily_forecast,
+            build_scenario_forecast,
+            build_daily_product_mix_view,
+            compute_daily_actuals,
+            get_product_price_map,
+            load_enriched_data,
+            load_product_mix_data,
+            load_product_mix_snapshot,
+            load_restock_policy,
+            save_product_mix_snapshot,
+            train_models,
+        )
+        from frontend.streamlit_app.services import weather_pipeline
+    except Exception as _retry_abs_exc:
+        # Fall back to local package-style imports (components/, services/ under streamlit_app)
+        try:
+            from components.layout import hover_tip, render_top_nav, sidebar_info_block
+            from services.data_utils import (
+                CHECKIN_FEATURES,
+                SNACK_FEATURES,
+                WEATHER_SCENARIOS,
+                DEFAULT_PRODUCT_PRICE,
+                allocate_product_level_forecast,
+                build_daily_forecast,
+                build_scenario_forecast,
+                build_daily_product_mix_view,
+                compute_daily_actuals,
+                get_product_price_map,
+                load_enriched_data,
+                load_product_mix_data,
+                load_product_mix_snapshot,
+                load_restock_policy,
+                save_product_mix_snapshot,
+                train_models,
+            )
+            from services import weather_pipeline  # type: ignore
+        except Exception as _local_exc:
+            # Surface the true root cause to Streamlit UI for fast debugging
+            import streamlit as _st
+            _st.error("Failed to import app modules. See the exceptions below (absolute, retried absolute, local):")
+            _st.exception(_abs_exc)
+            _st.exception(_retry_abs_exc)
+            _st.exception(_local_exc)
+            raise
+
 try:
     from frontend.streamlit_app.components.layout import hover_tip
 except ImportError:
@@ -33,25 +117,13 @@ except ImportError:
     except ImportError:
         def hover_tip(label: str, tooltip: str) -> None:
             st.caption(f"{label}: {tooltip}")
+# --- End import bootstrap ---
 
-from frontend.streamlit_app.services.data_utils import (
-    WEATHER_SCENARIOS,
-    build_scenario_forecast,
-    load_enriched_data,
-    load_pos_log,
-    load_weather_profile,
-    save_weather_profile,
-    train_models,
-)
-from frontend.streamlit_app.services import weather_pipeline
-
-PAGE_ICON = get_logo_path() or "💪"
 st.set_page_config(
     page_title="Refuel Ops Dashboard",
     layout="wide",
-    page_icon=PAGE_ICON,
+    page_icon="💪",
 )
-
 
 
 def render_summary_cards(df: pd.DataFrame) -> None:
@@ -68,26 +140,37 @@ def render_summary_cards(df: pd.DataFrame) -> None:
     )
 
 
-def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
-    history_window = df[df["timestamp"] >= df["timestamp"].max() - pd.Timedelta(days=window_days)]
+def render_history_charts(df: pd.DataFrame) -> None:
+    history_window = df[df["timestamp"] >= df["timestamp"].max() - pd.Timedelta(days=5)]
+    resampled = (
+        history_window.set_index("timestamp")
+        .resample("60min")
+        .mean()
+        .dropna(subset=["checkins", "snack_units"])
+        .reset_index()
+    )
     usage_fig = go.Figure()
     usage_fig.add_trace(
         go.Scatter(
-            x=history_window["timestamp"],
-            y=history_window["checkins"],
+            x=resampled["timestamp"],
+            y=resampled["checkins"],
             mode="lines",
             name="Check-ins",
-            line=dict(color=PRIMARY_GREEN, width=2),
+            line=dict(color="#2E86AB", width=1),
+            fill="tozeroy",
+            fillcolor="rgba(46,134,171,0.25)",
+            hovertemplate="Check-ins: %{y:.0f}<br>%{x|%a %H:%M}",
         )
     )
     usage_fig.add_trace(
         go.Scatter(
-            x=history_window["timestamp"],
-            y=history_window["snack_units"],
+            x=resampled["timestamp"],
+            y=resampled["snack_units"],
             mode="lines",
             name="Snack units",
             yaxis="y2",
-            line=dict(color=CORAL, width=2),
+            line=dict(color="#F18F01", width=2, shape="spline"),
+            hovertemplate="Snack units: %{y:.0f}<br>%{x|%a %H:%M}",
         )
     )
     usage_fig.update_layout(
@@ -97,6 +180,7 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
         yaxis2=dict(title="Snack units", overlaying="y", side="right"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=380,
+        margin=dict(t=60, b=10, l=60, r=60),
     )
 
     weather_fig = px.line(
@@ -105,7 +189,6 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
         y=["temperature_c", "precipitation_mm"],
         title="Weather trend (synthetic blend)",
         labels={"value": "Value", "variable": "Metric"},
-        color_discrete_map={"temperature_c": TEAL, "precipitation_mm": YELLOW},
     )
     weather_fig.update_layout(height=380, legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
@@ -115,8 +198,7 @@ def render_history_charts(df: pd.DataFrame, window_days: int) -> None:
 
 
 def render_weather_shotcast() -> None:
-    profile = load_weather_profile()
-    lat, lon = profile["lat"], profile["lon"]
+    lat, lon = get_weather_coordinates()
     iframe = f"""
     <iframe
         src="https://embed.windy.com/embed2.html?lat={lat:.3f}&lon={lon:.3f}&zoom=8&level=surface&overlay=rainAccu&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&detailLat={lat:.3f}&detailLon={lon:.3f}&metricWind=default&metricTemp=default&radarRange=-1"
@@ -147,7 +229,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["actual_checkins"],
             mode="lines",
             name="Actual check-ins",
-            line=dict(color=PRIMARY_GREEN, width=2),
+            line=dict(color="#2E86AB"),
         )
     )
     fig.add_trace(
@@ -156,7 +238,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["pred_checkins"],
             mode="lines",
             name="Forecast check-ins",
-            line=dict(color=DEEP_GREEN, dash="dash", width=2),
+            line=dict(color="#2E86AB", dash="dash"),
         )
     )
     fig.add_trace(
@@ -165,7 +247,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["actual_snacks"],
             mode="lines",
             name="Actual snack units",
-            line=dict(color=CORAL, width=2),
+            line=dict(color="#F18F01"),
             yaxis="y2",
         )
     )
@@ -175,7 +257,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             y=combined["pred_snack_units"],
             mode="lines",
             name="Forecast snack units",
-            line=dict(color=YELLOW, dash="dash", width=2),
+            line=dict(color="#F18F01", dash="dash"),
             yaxis="y2",
         )
     )
@@ -195,177 +277,12 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
                 x1=forecast["timestamp"].max(),
                 y0=0,
                 y1=1,
-                fillcolor="rgba(230,216,192,0.3)",
+                fillcolor="rgba(200,200,200,0.15)",
                 line=dict(width=0),
             )
         ],
     )
     st.plotly_chart(fig, use_container_width=True)
-
-
-def _latest_stock_reading() -> Optional[float]:
-    """Fetch the most recent stock reading from the POS log if available."""
-    try:
-        log_df = load_pos_log()
-    except Exception:
-        return None
-    if log_df.empty or "stock_remaining" not in log_df.columns:
-        return None
-    sorted_log = (
-        log_df.sort_values("timestamp", ascending=False)["stock_remaining"]
-        .pipe(pd.to_numeric, errors="coerce")
-        .dropna()
-    )
-    if sorted_log.empty:
-        return None
-    return float(sorted_log.iloc[0])
-
-
-def _estimate_daily_demand(history: pd.DataFrame, forecast: pd.DataFrame) -> float:
-    """Use historical + forecast data to approximate daily snack demand."""
-    if not history.empty:
-        daily_usage = (
-            history.resample("D", on="timestamp")["snack_units"]
-            .sum()
-            .tail(14)
-        )
-        daily_mean = float(daily_usage.mean()) if not daily_usage.empty else float("nan")
-        if pd.notna(daily_mean) and daily_mean > 0:
-            return daily_mean
-
-    if forecast.empty:
-        return 20.0
-
-    forecast_view = forecast.sort_values("timestamp")[["timestamp", "pred_snack_units"]].copy()
-    freq_seconds = forecast_view["timestamp"].diff().dt.total_seconds().median()
-    freq_hours = freq_seconds / 3600.0 if pd.notna(freq_seconds) and freq_seconds else 1.0
-    hourly_mean = float(forecast_view["pred_snack_units"].mean())
-    estimated_daily = hourly_mean * (24.0 / max(freq_hours, 0.1))
-    return max(5.0, estimated_daily)
-
-
-def render_model_reorder_plan(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
-    st.subheader("Model-driven reorder guidance")
-    if forecast.empty:
-        st.info("Run the scenario forecast above to unlock reorder recommendations.")
-        return
-
-    avg_daily_demand = _estimate_daily_demand(history, forecast)
-    default_stock = max(20.0, round(avg_daily_demand * 3))
-    latest_stock = _latest_stock_reading()
-    if latest_stock is not None:
-        default_stock = float(latest_stock)
-
-    forecast_view = (
-        forecast.sort_values("timestamp")[["timestamp", "pred_snack_units"]]
-        .copy()
-        .assign(pred_snack_units=lambda df_: df_["pred_snack_units"].clip(lower=0).fillna(0))
-    )
-
-    with st.expander("Reorder assumptions", expanded=True):
-        col_a, col_b, col_c = st.columns(3)
-        current_stock = col_a.number_input(
-            "Current stock (units)",
-            min_value=0.0,
-            value=float(default_stock),
-            step=5.0,
-            help="Auto-filled from the latest POS entry when available.",
-        )
-        safety_days = col_b.slider(
-            "Safety stock (days of demand)",
-            min_value=0.0,
-            max_value=5.0,
-            value=1.0,
-            step=0.5,
-            help="We will trigger a reorder before the projected stock drops below this buffer.",
-        )
-        reorder_lot = col_c.number_input(
-            "Preferred reorder lot (units)",
-            min_value=0.0,
-            value=float(max(10.0, round(avg_daily_demand))),
-            step=5.0,
-        )
-
-    safety_units = safety_days * avg_daily_demand
-    forecast_view["cumulative_units"] = forecast_view["pred_snack_units"].cumsum()
-    forecast_view["projected_stock"] = current_stock - forecast_view["cumulative_units"]
-
-    reorder_ts: Optional[pd.Timestamp] = None
-    if current_stock <= safety_units:
-        reorder_ts = pd.Timestamp.now()
-    else:
-        below_buffer = forecast_view["projected_stock"] <= safety_units
-        if below_buffer.any():
-            reorder_ts = forecast_view.loc[below_buffer, "timestamp"].iloc[0]
-
-    depletion_ts: Optional[pd.Timestamp] = None
-    below_zero = forecast_view["projected_stock"] <= 0
-    if below_zero.any():
-        depletion_ts = forecast_view.loc[below_zero, "timestamp"].iloc[0]
-
-    def _format_eta(target: Optional[pd.Timestamp]) -> str:
-        if target is None:
-            return "n/a"
-        eta_hours = (target - pd.Timestamp.now()).total_seconds() / 3600.0
-        if eta_hours < 0:
-            return "due"
-        return f"in {eta_hours:.1f} h"
-
-    col1, col2, col3 = st.columns(3)
-    if reorder_ts is not None:
-        col1.metric("Next reorder target", reorder_ts.strftime("%a %H:%M"), _format_eta(reorder_ts))
-    else:
-        col1.metric("Next reorder target", "Beyond forecast", "extend horizon")
-    if depletion_ts is not None:
-        col2.metric("Projected stockout", depletion_ts.strftime("%a %H:%M"), _format_eta(depletion_ts))
-    else:
-        col2.metric("Projected stockout", "Outside horizon", "buffer sufficient")
-    projected_floor = float(forecast_view["projected_stock"].min()) if not forecast_view.empty else float("nan")
-    col3.metric(
-        "Min projected stock",
-        f"{projected_floor:.0f} units",
-        f"Safety floor {safety_units:.0f}u",
-    )
-
-    if reorder_ts is not None:
-        st.success(
-            f"Plan to reorder ~{reorder_lot:.0f} units by **{reorder_ts.strftime('%Y-%m-%d %H:%M')}** "
-            f"before the forecast dips below the {safety_units:.0f} unit buffer."
-        )
-    else:
-        st.info(
-            "The current forecast horizon never touches the safety buffer. Increase the horizon or lower "
-            "the buffer if you need a nearer recommendation."
-        )
-
-    stock_chart = px.area(
-        forecast_view,
-        x="timestamp",
-        y="projected_stock",
-        title="Projected stock vs. safety buffer",
-        labels={"projected_stock": "Projected stock (units)"},
-    )
-    stock_chart.add_hline(
-        y=safety_units,
-        line_dash="dash",
-        line_color=CORAL,
-        annotation_text=f"Safety floor ({safety_units:.0f})",
-        annotation_position="bottom left",
-    )
-    stock_chart.update_traces(line_shape="hv")
-    st.plotly_chart(stock_chart, use_container_width=True)
-
-    st.dataframe(
-        forecast_view[["timestamp", "pred_snack_units", "projected_stock"]].rename(
-            columns={
-                "timestamp": "Time",
-                "pred_snack_units": "Predicted sales",
-                "projected_stock": "Projected stock",
-            }
-        ),
-        use_container_width=True,
-        height=260,
-    )
 
     kpi_cols = st.columns(3)
     kpi_cols[0].metric(
@@ -409,6 +326,8 @@ def render_model_reorder_plan(history: pd.DataFrame, forecast: pd.DataFrame) -> 
         .set_index("timestamp"),
         use_container_width=True,
     )
+
+
 def render_dashboard() -> None:
     render_top_nav("1_Dashboard.py", show_logo=False)
     st.title("Refuel Performance Cockpit")
@@ -420,33 +339,19 @@ def render_dashboard() -> None:
         sidebar_info_block()
         st.subheader("Scenario controls")
         use_weather_api = st.toggle("Use live weather API", value=True)
-        refresh_weather = st.button("🔄 Refresh weather data", use_container_width=True)
 
-    cache_buster = datetime.now(timezone.utc).timestamp() if refresh_weather else 0.0
     with st.spinner("Loading telemetry and contextual data..."):
-        data = load_enriched_data(use_weather_api=use_weather_api, cache_buster=cache_buster)
+        data = load_enriched_data(use_weather_api=use_weather_api)
+        product_mix_df = load_product_mix_data()
+    price_map = get_product_price_map()
     if data.empty:
         st.error("No gym data found yet. Drop a CSV into `data/gym_badges.csv` to get started.")
         return
 
-    total_days = max(1, int((data["timestamp"].max() - data["timestamp"].min()).days) or 1)
-    history_days = st.sidebar.slider(
-        "History window (days)",
-        min_value=3,
-        max_value=max(3, total_days),
-        value=min(7, max(3, total_days)),
-    )
-
     weather_source = data.attrs.get("weather_source", "synthetic")
-    weather_meta = data.attrs.get("weather_meta", {})
     st.caption(
         f"Weather source · {'Open-Meteo API' if weather_source == 'open-meteo' else 'synthetic fallback'}"
     )
-    if weather_meta:
-        latency_text = f"{weather_meta.get('latency_ms', 0):.0f} ms" if weather_meta.get("latency_ms") else "n/a"
-        st.caption(
-            f"Weather last synced {weather_meta.get('updated_at', 'n/a')} UTC · latency {latency_text} · coverage {weather_meta.get('coverage_start', '?')} → {weather_meta.get('coverage_end', '?')}"
-        )
     if use_weather_api and weather_source != "open-meteo":
         st.warning("Live weather API unreachable. Using synthetic fallback instead.")
 
@@ -494,13 +399,20 @@ def render_dashboard() -> None:
         "snack_price_change": snack_price_change,
         "use_live_weather": use_weather_api,
     }
+    restock_policy = load_restock_policy()
+    restock_caption = (
+        f"Auto restock ON · floor {restock_policy.get('threshold_units', 40)}u · lot {restock_policy.get('lot_size', 50)}u"
+        if restock_policy.get("auto_enabled")
+        else "Auto restock OFF · configure policy in POS Console"
+    )
+    st.caption(restock_caption)
 
     render_summary_cards(data)
-    render_history_charts(data, history_days)
+    render_history_charts(data)
     st.subheader("Weather shotcast")
-    caption_col, button_col = st.columns([0.75, 0.25])
-    caption_col.caption("Windy radar & cloud layers centered on the configured coordinates.")
-    if button_col.button("Center on St. Gallen", key="shotcast-center-page"):
+    info_col, btn_col = st.columns([0.75, 0.25])
+    info_col.caption("Windy radar & cloud layers centered on the configured coordinates.")
+    if btn_col.button("Center on St. Gallen", key="shotcast-center-root"):
         save_weather_profile(
             {
                 "lat": weather_pipeline.DEFAULT_LAT,
@@ -511,11 +423,190 @@ def render_dashboard() -> None:
         st.experimental_rerun()
     render_weather_shotcast()
 
+    if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:
+        st.subheader("Product mix snapshot")
+        latest_mix_date = product_mix_df["date"].max()
+        latest_mix = product_mix_df[product_mix_df["date"] == latest_mix_date].copy()
+        latest_mix["weight_pct"] = latest_mix["weight"] * 100
+        latest_mix["unit_price"] = (
+            latest_mix["product"].map(price_map).fillna(DEFAULT_PRODUCT_PRICE).round(2)
+        )
+        latest_mix["cost_estimate"] = latest_mix["suggested_qty"] * latest_mix["unit_price"]
+        days_old = (pd.Timestamp.now().normalize() - latest_mix_date.normalize()).days
+        if days_old > 1:
+            st.warning(
+                f"Product mix snapshot is {days_old} day(s) old. Update `data/product_mix_daily.csv` to reflect the latest plan."
+            )
+        mix_cols = st.columns(3)
+        mix_cols[0].metric("Snapshot date", latest_mix_date.strftime("%Y-%m-%d"))
+        mix_cols[1].metric("Visitors plan", f"{int(latest_mix['visitors'].iloc[0]):,}")
+        mix_cols[2].metric(
+            "Suggested units",
+            f"{latest_mix['suggested_qty'].sum():.0f}",
+            f"Est. cost CHF{latest_mix['cost_estimate'].sum():.0f}",
+        )
+        mix_fig = px.bar(
+            latest_mix,
+            x="product",
+            y="weight_pct",
+            title="Mix share by product",
+            labels={"weight_pct": "Share (%)", "product": "Product"},
+            color="hot_day",
+            color_discrete_map={0: "#2E86AB", 1: "#E74C3C"},
+        )
+        mix_fig.update_layout(legend_title_text="Hot day?")
+        st.plotly_chart(mix_fig, use_container_width=True)
+        st.dataframe(
+            latest_mix[["product", "suggested_qty", "weight_pct", "unit_price", "cost_estimate", "rainy_day"]]
+            .rename(
+                columns={
+                    "product": "Product",
+                    "suggested_qty": "Suggested Qty",
+                    "weight_pct": "Mix Share (%)",
+                    "unit_price": "Unit price (CHF)",
+                    "cost_estimate": "Est. Cost (CHF)",
+                    "rainy_day": "Rainy flag",
+                }
+            )
+            .style.format(
+                {
+                    "Suggested Qty": "{:.0f}",
+                    "Mix Share (%)": "{:.1f}",
+                    "Unit price (CHF)": "CHF{:.2f}",
+                    "Est. Cost (CHF)": "CHF{:.0f}",
+                }
+            ),
+            use_container_width=True,
+            height=260,
+        )
+    else:
+        st.info("No product mix data detected. Upload `data/product_mix_daily.csv` to populate this snapshot.")
+
+    merged_mix_view = build_daily_product_mix_view(data, product_mix_df)
+    if not merged_mix_view.empty:
+        st.subheader("Plan vs telemetry (daily)")
+        st.caption("Daily rollup that compares suggested mix volume with actual snack demand.")
+        recent_window = merged_mix_view[
+            merged_mix_view["date"] >= merged_mix_view["date"].max() - pd.Timedelta(days=7)
+        ].copy()
+        if recent_window.empty:
+            recent_window = merged_mix_view.copy()
+        daily_rollup = (
+            recent_window.groupby("date")
+            .agg(
+                planned_visitors=("visitors", "first"),
+                actual_checkins=("actual_checkins", "first"),
+                planned_units=("suggested_qty", "sum"),
+                actual_units=("implied_units", "sum"),
+                gap_units=("unit_gap", "sum"),
+                avg_temp_c=("avg_temp_c", "first"),
+            )
+            .reset_index()
+            .sort_values("date", ascending=False)
+        )
+        daily_rollup["actual_units"] = daily_rollup["actual_units"].fillna(daily_rollup["planned_units"])
+        daily_rollup["gap_units"] = daily_rollup["gap_units"].fillna(0.0)
+        saved_snapshot = load_product_mix_snapshot()
+        last_saved_label = "Never"
+        if not saved_snapshot.empty and "date" in saved_snapshot.columns:
+            last_saved_label = saved_snapshot["date"].max().strftime("%Y-%m-%d")
+
+        table_col, action_col = st.columns([4, 1])
+        table_col.dataframe(
+            daily_rollup.rename(
+                columns={
+                    "date": "Date",
+                    "planned_visitors": "Planned visitors",
+                    "actual_checkins": "Actual check-ins",
+                    "planned_units": "Suggested units",
+                    "actual_units": "Implied units",
+                    "gap_units": "Unit gap",
+                    "avg_temp_c": "Avg temp (°C)",
+                }
+            ),
+            height=320,
+        )
+        action_col.markdown(f"Last snapshot:<br/>**{last_saved_label}**", unsafe_allow_html=True)
+        if action_col.button("Save snapshot", key="save-mix-snapshot", use_container_width=True):
+            metadata = {"snapshot_saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            save_product_mix_snapshot(merged_mix_view, metadata=metadata)
+            action_col.success("Saved to data/product_mix_enriched.csv")
+
     forecast_df = build_scenario_forecast(data, models, scenario)
+    daily_actuals = compute_daily_actuals(data)
+    daily_forecast = build_daily_forecast(forecast_df)
+    if (not daily_actuals.empty) or (not daily_forecast.empty):
+        st.subheader("Daily snack outlook")
+        hover_tip(
+            "ℹ️ Aggregation math",
+            "Daily table sums hourly check-ins/snacks and compares them with forecasted sums. Forecast rows come from the same linear regressors but aggregated by date.",
+        )
+        merged_daily = daily_actuals.merge(
+            daily_forecast,
+            on="date",
+            how="outer",
+            suffixes=("_actual", "_forecast"),
+        ).sort_values("date")
+        if not merged_daily.empty:
+            window_mask = merged_daily["date"] >= (merged_daily["date"].max() - pd.Timedelta(days=10))
+            merged_window = merged_daily[window_mask].copy()
+            merged_window["date"] = merged_window["date"].dt.strftime("%Y-%m-%d")
+            display_cols = [
+                "date",
+                "actual_checkins",
+                "pred_checkins",
+                "actual_snack_units",
+                "pred_snack_units",
+                "actual_snack_revenue",
+                "pred_snack_revenue",
+            ]
+            present_cols = [col for col in display_cols if col in merged_window.columns]
+            st.dataframe(
+                merged_window[present_cols].rename(
+                    columns={
+                        "date": "Date",
+                        "actual_checkins": "Actual check-ins",
+                        "pred_checkins": "Forecast check-ins",
+                        "actual_snack_units": "Actual snacks",
+                        "pred_snack_units": "Forecast snacks",
+                        "actual_snack_revenue": "Actual revenue",
+                        "pred_snack_revenue": "Forecast revenue",
+                    }
+                ),
+                use_container_width=True,
+                height=280,
+            )
+        product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
+        if not product_forecast.empty:
+            st.caption("Next 3 days · snack demand split by merchandise plan")
+            hover_tip(
+                "ℹ️ Mix allocation",
+                "Product-level forecast multiplies each day's total snack prediction by its mix weight: units_i = weight_i × total_pred_snacks.",
+            )
+            upcoming_dates = sorted(product_forecast["date"].unique())[:3]
+            product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
+            product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
+            st.dataframe(
+                product_window[
+                    ["date", "product", "forecast_units", "suggested_qty", "weight"]
+                ].rename(
+                    columns={
+                        "date": "Date",
+                        "product": "Product",
+                        "forecast_units": "Forecast units",
+                        "suggested_qty": "Plan units",
+                        "weight": "Mix weight",
+                    }
+                ).style.format({"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}"}),
+                use_container_width=True,
+                height=280,
+            )
     st.subheader("What-if forecast")
+    hover_tip(
+        "ℹ️ Forecast math",
+        "Predictions come from two linear regressions: check-ins = β·features, snacks = γ·features (including weather shifts and events). Sliders alter the feature inputs before inference.",
+    )
     render_forecast_section(data, forecast_df)
-    render_model_reorder_plan(data, forecast_df)
-    render_footer()
 
 
 def _safe_render() -> None:
