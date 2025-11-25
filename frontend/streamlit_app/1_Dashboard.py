@@ -136,7 +136,7 @@ def render_quick_actions(recent_window: pd.DataFrame) -> None:
     with hero_left:
         hero_btn_cols = st.columns(3)
         if hero_btn_cols[0].button("📊 Dashboard", use_container_width=True):
-            st.switch_page("pages/1_Dashboard.py")
+            st.switch_page("1_Dashboard.py")
         if hero_btn_cols[1].button("🔮 Run Forecast", use_container_width=True):
             st.switch_page("pages/2_Forecasts.py")
         if hero_btn_cols[2].button("🧾 POS Console", use_container_width=True):

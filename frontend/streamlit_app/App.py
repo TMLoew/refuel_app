@@ -23,4 +23,4 @@ PAGE_ICON = get_logo_path() or "📊"
 st.set_page_config(page_title="Refuel Control Center", page_icon=PAGE_ICON, layout="wide")
 
 st.write("Redirecting to the dashboard...")
-st.switch_page("pages/1_Dashboard.py")
+st.switch_page("1_Dashboard.py")
