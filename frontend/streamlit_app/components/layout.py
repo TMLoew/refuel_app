@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -12,51 +13,96 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
-from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-PRIMARY_GREEN = "#0B7A1F"
-DEEP_GREEN = "#0B5B2C"
-CORAL = "#E97874"
-TEAL = "#78A7B2"
-YELLOW = "#F7E24B"
-SAND = "#E6D8C0"
-INK = "#0B1F1A"
+LIGHT_PRIMARY_GREEN = "#0B7A1F"
+LIGHT_DEEP_GREEN = "#0B5B2C"
+LIGHT_CORAL = "#E97874"
+LIGHT_TEAL = "#78A7B2"
+LIGHT_YELLOW = "#F7E24B"
+LIGHT_SAND = "#E6D8C0"
+LIGHT_INK = "#0B1F1A"
 
-px.defaults.color_discrete_sequence = [PRIMARY_GREEN, CORAL, TEAL, YELLOW, DEEP_GREEN, "#000000"]
-px.defaults.color_continuous_scale = [SAND, PRIMARY_GREEN]
+DARK_PRIMARY_GREEN = "#5AD38B"
+DARK_DEEP_GREEN = "#2E8B57"
+DARK_CORAL = "#F5A6A6"
+DARK_TEAL = "#A3D3DC"
+DARK_YELLOW = "#FFF68F"
+DARK_SAND = "#3A4252"
+DARK_INK = "#F5F7FA"
+
+px.defaults.color_discrete_sequence = [LIGHT_PRIMARY_GREEN, LIGHT_CORAL, LIGHT_TEAL, LIGHT_YELLOW, LIGHT_DEEP_GREEN, "#000000"]
+px.defaults.color_continuous_scale = [LIGHT_SAND, LIGHT_PRIMARY_GREEN]
 
 refuel_template = go.layout.Template(
     layout=dict(
-        font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=INK),
-        title=dict(font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=INK)),
+        font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=LIGHT_INK),
+        title=dict(font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=LIGHT_INK)),
         colorway=px.defaults.color_discrete_sequence,
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
         xaxis=dict(
-            gridcolor=SAND,
-            zerolinecolor=SAND,
-            linecolor=DEEP_GREEN,
-            title=dict(font=dict(color=INK)),
-            tickfont=dict(color=INK),
+            gridcolor=LIGHT_SAND,
+            zerolinecolor=LIGHT_SAND,
+            linecolor=LIGHT_DEEP_GREEN,
+            title=dict(font=dict(color=LIGHT_INK)),
+            tickfont=dict(color=LIGHT_INK),
         ),
         yaxis=dict(
-            gridcolor=SAND,
-            zerolinecolor=SAND,
-            linecolor=DEEP_GREEN,
-            title=dict(font=dict(color=INK)),
-            tickfont=dict(color=INK),
+            gridcolor=LIGHT_SAND,
+            zerolinecolor=LIGHT_SAND,
+            linecolor=LIGHT_DEEP_GREEN,
+            title=dict(font=dict(color=LIGHT_INK)),
+            tickfont=dict(color=LIGHT_INK),
         ),
         legend=dict(
             bgcolor="#FFFFFF",
-            bordercolor=SAND,
+            bordercolor=LIGHT_SAND,
             borderwidth=0.5,
-            font=dict(color=INK),
+            font=dict(color=LIGHT_INK),
         ),
     )
 )
-pio.templates["refuel"] = refuel_template
-pio.templates.default = "refuel"
-px.defaults.template = "refuel"
+pio.templates["refuel_light"] = refuel_template
+
+refuel_dark_template = go.layout.Template(
+    layout=dict(
+        font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=DARK_INK),
+        title=dict(font=dict(family="Gill Sans,Gill Sans MT,Calibri,Trebuchet MS,sans-serif", color=DARK_INK)),
+        colorway=[DARK_PRIMARY_GREEN, DARK_CORAL, DARK_TEAL, DARK_YELLOW, DARK_DEEP_GREEN, "#FFFFFF"],
+        paper_bgcolor="#111219",
+        plot_bgcolor="#111219",
+        xaxis=dict(
+            gridcolor=DARK_SAND,
+            zerolinecolor=DARK_SAND,
+            linecolor=DARK_DEEP_GREEN,
+            title=dict(font=dict(color=DARK_INK)),
+            tickfont=dict(color=DARK_INK),
+        ),
+        yaxis=dict(
+            gridcolor=DARK_SAND,
+            zerolinecolor=DARK_SAND,
+            linecolor=DARK_DEEP_GREEN,
+            title=dict(font=dict(color=DARK_INK)),
+            tickfont=dict(color=DARK_INK),
+        ),
+        legend=dict(
+            bgcolor="#111219",
+            bordercolor=DARK_SAND,
+            borderwidth=0.5,
+            font=dict(color=DARK_INK),
+        ),
+    )
+)
+pio.templates["refuel_dark"] = refuel_dark_template
+
+def _apply_plotly_theme() -> None:
+    theme = st.get_option("theme.base") if hasattr(st, "get_option") else "light"
+    if theme == "dark":
+        px.defaults.template = "refuel_dark"
+    else:
+        px.defaults.template = "refuel_light"
+
+_apply_plotly_theme()
 
 
 @dataclass(frozen=True)
@@ -84,49 +130,8 @@ def render_top_nav(
     nav_items: Iterable[NavItem] = DEFAULT_NAV,
     show_logo: bool = False,
 ) -> None:
-    """Render a top nav bar that switches pages without opening new tabs."""
-    st.markdown(
-        "<style>[data-testid='stSidebarNav']{display:none !important;}</style>",
-        unsafe_allow_html=True,
-    )
+    """Inject theme CSS and position the brand block; navigation happens via sidebar."""
     _inject_theme_css()
-    ctx = get_script_run_ctx()
-    if ctx is None:
-        return
-    pages = ctx.pages_manager.get_pages()
-    logo_bytes = get_logo_bytes() if show_logo else None
-
-    def lookup(path: str) -> Optional[dict]:
-        for page in pages.values():
-            if page["script_path"].endswith(path):
-                return page
-        return None
-
-    st.markdown("<div class='refuel-top-nav'>", unsafe_allow_html=True)
-    if logo_bytes:
-        wrapper_cols = st.columns([0.2, 0.8])
-        wrapper_cols[0].image(logo_bytes, width=90)
-        cols = wrapper_cols[1].columns(len(nav_items))
-    else:
-        cols = st.columns(len(nav_items))
-
-    for col, item in zip(cols, nav_items):
-        page_meta = lookup(item.path)
-        if not page_meta:
-            continue
-        with col:
-            label = f"{item.emoji} {item.label}"
-            if item.path.endswith(active_page):
-                st.button(
-                    label=label,
-                    disabled=True,
-                    use_container_width=True,
-                    key=f"nav-active-{item.path}",
-                )
-            else:
-                if st.button(label, key=f"nav-{item.path}", use_container_width=True):
-                    st.switch_page(item.path)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 LOGO_CANDIDATES = [
@@ -155,13 +160,21 @@ def get_logo_bytes() -> Optional[bytes]:
     return resolved.read_bytes()
 
 def sidebar_info_block() -> None:
-    """Standard sidebar header with team + data refresh details."""
+    """Render the brand block at the sidebar top."""
     logo_bytes = get_logo_bytes()
+    logo_html = ""
     if logo_bytes:
-        st.sidebar.image(logo_bytes, width=120)
-    st.sidebar.markdown("**Refuel Ops**\n\nLive telemetry cockpit")
-    st.sidebar.caption("Data updated every hour · Last refresh from notebook sync.")
-    st.sidebar.divider()
+        encoded = base64.b64encode(logo_bytes).decode("utf-8")
+        logo_html = f"<img src='data:image/png;base64,{encoded}' alt='Refuel logo' />"
+    block = f"""
+    <div class="refuel-sidebar-brand">
+        {logo_html}
+        <strong>Refuel Ops</strong>
+        <span>Live telemetry cockpit</span>
+        <span>Data updated every hour · Last refresh from notebook sync.</span>
+    </div>
+    """
+    st.sidebar.markdown(block, unsafe_allow_html=True)
 
 
 def render_footer() -> None:
@@ -187,6 +200,13 @@ def _inject_theme_css() -> None:
             --refuel-accent-teal: #78A7B2;
             --refuel-accent-yellow: #F7E24B;
         }
+        [data-theme="dark"] {
+            --refuel-surface: #111219;
+            --refuel-text: #F5F7FA;
+            --refuel-pill-bg: #1f2633;
+            --refuel-pill-fg: #F5F7FA;
+            --refuel-pill-border: #3a4252;
+        }
         body, .stApp, div, span, label, button {
             font-family: "Gill Sans", "Gill Sans MT", Calibri, "Trebuchet MS", sans-serif !important;
         }
@@ -194,38 +214,42 @@ def _inject_theme_css() -> None:
             background-color: var(--refuel-surface);
             color: var(--refuel-text);
         }
-        .refuel-top-nav div[data-testid="column"] {
-            flex: 0 0 auto !important;
+        html[data-theme="dark"],
+        html[data-theme="dark"] body,
+        html[data-theme="dark"] .stApp,
+        html[data-theme="dark"] .stAppViewContainer,
+        html[data-theme="dark"] .main,
+        html[data-theme="dark"] .block-container {
+            background-color: #111219 !important;
+            color: #F5F7FA !important;
         }
-        .refuel-top-nav div[data-testid="stButton"] > button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            min-width: 120px;
-            margin: 0 6px 8px 0 !important;
-            height: 64px;
-            background-color: var(--refuel-pill-bg);
-            color: var(--refuel-pill-fg);
-            border: 1px solid var(--refuel-pill-border);
-            border-radius: 18px;
-            box-shadow: none;
-            width: auto;
+section[data-testid="stSidebar"] {
+            position: relative;
+            padding-top: 170px !important;
         }
-        .refuel-top-nav div[data-testid="stButton"] > button span {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            white-space: nowrap;
+.refuel-sidebar-brand {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 12px;
+            text-align: center;
+            background: var(--refuel-surface,#ffffff);
+            border-bottom: 1px solid var(--refuel-pill-border,#0B5B2C);
+            z-index: 2000;
         }
-        .refuel-top-nav div[data-testid="stButton"] > button:hover:not(:disabled) {
-            border-color: var(--refuel-primary);
-            color: var(--refuel-primary);
+nav[data-testid="stSidebarNav"], div[data-testid="stSidebarNav"] {
+            margin-top: 0 !important;
         }
-        .refuel-top-nav div[data-testid="stButton"] > button:disabled {
-            background-color: var(--refuel-primary);
-            color: #ffffff;
-            border-color: var(--refuel-primary);
+.refuel-sidebar-brand img {
+            width: 120px;
+            display: block;
+            margin: 0 auto 8px;
+        }
+.refuel-sidebar-brand span {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--refuel-text,#0B1F1A);
         }
         </style>
         """,
