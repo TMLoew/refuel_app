@@ -30,6 +30,12 @@ DARK_YELLOW = "#FFF68F"
 DARK_SAND = "#3A4252"
 DARK_INK = "#F5F7FA"
 
+# Backwards-compatible aliases used by some pages
+PRIMARY_GREEN = LIGHT_PRIMARY_GREEN
+DEEP_GREEN = LIGHT_DEEP_GREEN
+CORAL = LIGHT_CORAL
+YELLOW = LIGHT_YELLOW
+
 px.defaults.color_discrete_sequence = [LIGHT_PRIMARY_GREEN, LIGHT_CORAL, LIGHT_TEAL, LIGHT_YELLOW, LIGHT_DEEP_GREEN, "#000000"]
 px.defaults.color_continuous_scale = [LIGHT_SAND, LIGHT_PRIMARY_GREEN]
 
@@ -113,7 +119,7 @@ class NavItem:
 
 
 DEFAULT_NAV: List[NavItem] = [
-    NavItem("Dashboard", "📊", "1_Dashboard.py"),
+    NavItem("Home", "📊", "1_Dashboard.py"),
     NavItem("Forecasts", "🔮", "pages/2_Forecasts.py"),
     NavItem("Data Editor", "📝", "pages/4_Data_Editor.py"),
     NavItem("POS Console", "🧾", "pages/7_POS_Console.py"),

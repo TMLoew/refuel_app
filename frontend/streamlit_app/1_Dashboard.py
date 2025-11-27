@@ -125,7 +125,7 @@ except ImportError:
 # --- End import bootstrap ---
 
 st.set_page_config(
-    page_title="Refuel Ops Dashboard",
+    page_title="Refuel Home",
     layout="wide",
     page_icon="💪",
 )
@@ -134,12 +134,10 @@ st.set_page_config(
 def render_quick_actions(recent_window: pd.DataFrame) -> None:
     hero_left, hero_right = st.columns([0.65, 0.35])
     with hero_left:
-        hero_btn_cols = st.columns(3)
-        if hero_btn_cols[0].button("📊 Dashboard", use_container_width=True):
-            st.switch_page("1_Dashboard.py")
-        if hero_btn_cols[1].button("🔮 Run Forecast", use_container_width=True):
+        hero_btn_cols = st.columns(2)
+        if hero_btn_cols[0].button("🔮 Run Forecast", use_container_width=True):
             st.switch_page("pages/2_Forecasts.py")
-        if hero_btn_cols[2].button("🧾 POS Console", use_container_width=True):
+        if hero_btn_cols[1].button("🧾 POS Console", use_container_width=True):
             st.switch_page("pages/7_POS_Console.py")
     with hero_right:
         st.metric("Next 24h check-ins", f"{recent_window['checkins'].sum():.0f}")
@@ -273,7 +271,7 @@ def render_history_charts(df: pd.DataFrame) -> None:
     resampled = (
         history_window.set_index("timestamp")
         .resample("60min")
-        .mean()
+        .mean(numeric_only=True)
         .dropna(subset=["checkins", "snack_units"])
         .reset_index()
     )
@@ -458,7 +456,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
 
 def render_dashboard() -> None:
     render_top_nav("1_Dashboard.py", show_logo=False)
-    st.title("Refuel Performance Cockpit")
+    st.title("Refuel Home")
     st.caption(
         "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."
     )

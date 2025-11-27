@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+from streamlit.runtime.secrets import StreamlitSecretNotFoundError
 
 from frontend.streamlit_app.components.layout import (
     render_top_nav,
@@ -560,7 +561,11 @@ export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon
 st.download_button("Download config JSON", export_blob, file_name="refuel_config.json", mime="application/json")
 
 st.subheader("Advanced automation (restricted)")
-ops_secret = st.secrets.get("OPS_PASSWORD") or st.secrets.get("ops_password")
+try:
+    ops_secret = st.secrets.get("OPS_PASSWORD") or st.secrets.get("ops_password")
+except StreamlitSecretNotFoundError:
+    ops_secret = None
+
 if not ops_secret:
     st.info("Set OPS_PASSWORD in `.streamlit/secrets.toml` to unlock the procurement autopilot controls.")
 else:
