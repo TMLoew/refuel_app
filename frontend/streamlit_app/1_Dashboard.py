@@ -133,8 +133,19 @@ st.set_page_config(
 
 
 def _cookie_popup_enabled() -> bool:
+    secret_keys = [
+        "COOKIE_POPUP_ENABLED",
+        "COOKIE_POPUP",
+        "cookie_popup_enabled",
+        "cookie_popup",
+        "cookie_banner",
+    ]
+    raw_flag = None
     try:
-        raw_flag = st.secrets.get("COOKIE_POPUP_ENABLED") or st.secrets.get("cookie_popup_enabled")
+        for key in secret_keys:
+            if key in st.secrets:
+                raw_flag = st.secrets.get(key)
+                break
     except StreamlitSecretNotFoundError:
         return False
     if raw_flag is None:
