@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -137,6 +138,7 @@ def render_top_nav(
 ) -> None:
     """Inject theme CSS and position the brand block; navigation happens via sidebar."""
     _inject_theme_css()
+    _enforce_cookie_consent()
 
 
 LOGO_CANDIDATES = [
@@ -261,6 +263,82 @@ nav[data-testid="stSidebarNav"], div[data-testid="stSidebarNav"] {
         unsafe_allow_html=True,
     )
     st.session_state[key] = True
+
+
+def _cookie_flag() -> tuple[bool, str]:
+    secret_keys = [
+        "COOKIE_POPUP_ENABLED",
+        "COOKIE_POPUP",
+        "cookie_popup_enabled",
+        "cookie_popup",
+        "cookie_banner",
+    ]
+    raw_flag = None
+    source = "none"
+    try:
+        for key in secret_keys:
+            if key in st.secrets:
+                raw_flag = st.secrets.get(key)
+                source = f"secret:{key}"
+                break
+    except Exception:
+        raw_flag = None
+    if raw_flag is None:
+        for key in secret_keys:
+            if key in os.environ:
+                raw_flag = os.environ.get(key)
+                source = f"env:{key}"
+                break
+    enabled = False
+    if raw_flag is not None:
+        enabled = str(raw_flag).strip().lower() not in {"0", "false", "no", "off", ""}
+    return enabled, source
+
+
+def _enforce_cookie_consent() -> None:
+    enabled, _source = _cookie_flag()
+    if not enabled:
+        return
+    consent_key = "cookie_popup_choice"
+    if st.session_state.get(consent_key):
+        return
+    try:
+        modal = st.modal("Cookies & telemetry", key="cookie-modal", width=520)
+    except Exception:
+        modal = None
+    if modal:
+        with modal:
+            st.write(
+                "We use essential cookies for session integrity and optional telemetry to improve the experience. "
+                "You can decline non-essential tracking."
+            )
+            col_a, col_b = st.columns(2, gap="medium")
+            accept = col_a.button("Accept all", key="cookie-accept", use_container_width=True)
+            decline = col_b.button("Decline non-essential", key="cookie-decline", use_container_width=True)
+            st.caption("Please choose an option to continue.")
+            if accept:
+                st.session_state[consent_key] = "accepted"
+                st.rerun()
+            if decline:
+                st.session_state[consent_key] = "declined"
+                st.rerun()
+    else:
+        banner = st.container(border=True)
+        banner.subheader("Cookies & telemetry")
+        banner.write(
+            "We use essential cookies for session integrity and optional telemetry to improve the experience. "
+            "You can decline non-essential tracking."
+        )
+        col_a, col_b = banner.columns(2)
+        accept = col_a.button("Accept all", key="cookie-accept")
+        decline = col_b.button("Decline non-essential", key="cookie-decline")
+        if accept:
+            st.session_state[consent_key] = "accepted"
+            st.rerun()
+        if decline:
+            st.session_state[consent_key] = "declined"
+            st.rerun()
+        st.stop()
 
 
 def _ensure_tooltip_css() -> None:
