@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit.runtime.secrets import StreamlitSecretNotFoundError
 
 # Try absolute import first, but capture the exception so we can display the real cause if it
 # actually comes from inside data_utils (e.g., missing third‑party dependency like sklearn).
@@ -129,6 +130,39 @@ st.set_page_config(
     layout="wide",
     page_icon="💪",
 )
+
+
+def _cookie_popup_enabled() -> bool:
+    try:
+        raw_flag = st.secrets.get("COOKIE_POPUP_ENABLED") or st.secrets.get("cookie_popup_enabled")
+    except StreamlitSecretNotFoundError:
+        return False
+    if raw_flag is None:
+        return False
+    return str(raw_flag).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def render_cookie_popup() -> None:
+    if not _cookie_popup_enabled():
+        return
+    consent_key = "cookie_popup_choice"
+    if st.session_state.get(consent_key):
+        st.caption(f"Cookie preference saved: {st.session_state[consent_key]}")
+        return
+
+    with st.container(border=True):
+        st.markdown("### Cookies & telemetry")
+        st.write(
+            "We use essential cookies for session integrity and optional telemetry to improve the experience. "
+            "You can decline non-essential tracking."
+        )
+        btn_accept, btn_reject = st.columns(2)
+        if btn_accept.button("Accept all", key="cookie-accept"):
+            st.session_state[consent_key] = "accepted"
+            st.success("Thanks! Non-essential cookies enabled.")
+        if btn_reject.button("Decline non-essential", key="cookie-decline"):
+            st.session_state[consent_key] = "declined"
+            st.info("Only essential cookies will be used.")
 
 
 def render_quick_actions(recent_window: pd.DataFrame) -> None:
@@ -460,6 +494,7 @@ def render_dashboard() -> None:
     st.caption(
         "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."
     )
+    render_cookie_popup()
 
     with st.sidebar:
         sidebar_info_block()
