@@ -1,6 +1,7 @@
 
 # --- Import bootstrap: make this file work from both local runs and Streamlit Cloud ---
 import sys
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -147,7 +148,13 @@ def _cookie_popup_enabled() -> bool:
                 raw_flag = st.secrets.get(key)
                 break
     except StreamlitSecretNotFoundError:
-        return False
+        raw_flag = None
+    if raw_flag is None:
+        # Fallback to env vars if secrets aren't configured
+        for key in secret_keys:
+            if key in os.environ:
+                raw_flag = os.environ.get(key)
+                break
     if raw_flag is None:
         return False
     return str(raw_flag).strip().lower() not in {"0", "false", "no", "off", ""}
@@ -158,7 +165,12 @@ def render_cookie_popup() -> None:
         return
     consent_key = "cookie_popup_choice"
     if st.session_state.get(consent_key):
-        st.caption(f"Cookie preference saved: {st.session_state[consent_key]}")
+        saved = st.session_state[consent_key]
+        info_col, reset_col = st.columns([0.7, 0.3])
+        info_col.caption(f"Cookie preference saved: {saved}")
+        if reset_col.button("Reset cookies", key="cookie-reset"):
+            st.session_state.pop(consent_key, None)
+            st.experimental_rerun()
         return
 
     with st.container(border=True):
