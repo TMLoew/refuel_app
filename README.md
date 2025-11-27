@@ -40,7 +40,7 @@ python backend/app/services/pipeline.py
 - `backend/app/services/ml/` – shared demand model training + CLI trainer
 - `backend/app/services/pipeline.py` – batch builder for daily product mix CSV
 - `data/` – sample telemetry & persisted artifacts (`gym_badges*.csv`, product mix, weather cache, POS log, etc.)
-- `logo.webp` – brand asset used across the UI
+- `logo.jpeg` – brand asset used across the UI
 
 ## Data Inputs & Persistence
 

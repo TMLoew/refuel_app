@@ -144,6 +144,8 @@ def render_top_nav(
 LOGO_CANDIDATES = [
     Path(__file__).resolve().parents[3] / "logo.webp",
     Path(__file__).resolve().parents[3] / "frontend" / "logo.webp",
+    Path(__file__).resolve().parents[3] / "logo.jpeg",
+    Path(__file__).resolve().parents[3] / "frontend" / "logo.jpeg",
 ]
 
 
