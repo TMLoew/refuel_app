@@ -108,11 +108,11 @@ hover_tip(
 )
 st.markdown(
     r"""
-    *Linear fit*: the dashed trendline solves
+    *Linear fit*: the dashed trendline solves  
     \[
-    \underset{\beta_0,\beta_1}{\arg\min} \sum_{i}(y_i - (\beta_0 + \beta_1 x_i))^2
+    \underset{\beta_0,\beta_1}{\arg\min} \sum_i \left(y_i - (\beta_0 + \beta_1 x_i)\right)^2
     \]
-    for \(y=\) check-ins and \(x=\) temperature, with color encoding the weekend dummy.
+    for \(y\) = check-ins and \(x\) = temperature, with color encoding the weekend dummy.
     """
 )
 scatter_cols[1].plotly_chart(
