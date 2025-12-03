@@ -106,15 +106,9 @@ hover_tip(
     "Hover for temperature → check-ins fit",
     "OLS solves min Σ(y_i - (β₀ + β₁x_i))² with y = check-ins, x = temperature; weekend color shows categorical split.",
 )
-st.markdown(
-    r"""
-    *Linear fit*: the dashed trendline solves  
-    \[
-    \underset{\beta_0,\beta_1}{\arg\min} \sum_i \left(y_i - (\beta_0 + \beta_1 x_i)\right)^2
-    \]
-    for \(y\) = check-ins and \(x\) = temperature, with color encoding the weekend dummy.
-    """
-)
+st.markdown("*Linear fit*: the dashed trendline solves")
+st.latex(r"\underset{\beta_0,\beta_1}{\arg\min} \sum_i \left(y_i - (\beta_0 + \beta_1 x_i)\right)^2")
+st.markdown("for y = check-ins and x = temperature, with color encoding the weekend dummy.")
 scatter_cols[1].plotly_chart(
     px.scatter(
         window_df,
