@@ -100,10 +100,19 @@ def _request_hourly_weather(
     lat: float = DEFAULT_LAT,
     lon: float = DEFAULT_LON,
     timezone: str = DEFAULT_TZ,
+    mode: str | None = None,
 ) -> Tuple[Dict, float]:
     _ensure_requests()
+    today = pd.Timestamp.utcnow().date()
+    if mode is None:
+        base = "https://archive-api.open-meteo.com/v1/archive" if pd.to_datetime(end_date).date() < today else "https://api.open-meteo.com/v1/forecast"
+    elif mode == "archive":
+        base = "https://archive-api.open-meteo.com/v1/archive"
+    else:
+        base = "https://api.open-meteo.com/v1/forecast"
+
     url = (
-        "https://api.open-meteo.com/v1/forecast"
+        f"{base}"
         f"?latitude={lat}&longitude={lon}"
         f"&start_date={start_date}&end_date={end_date}"
         "&hourly=temperature_2m,relative_humidity_2m,precipitation"
@@ -138,26 +147,37 @@ def fetch_hourly_weather_frame(
     current = start_dt
     while current <= end_dt:
         chunk_end = min(current + timedelta(days=chunk_days - 1), end_dt)
-        payload, latency_ms = _request_hourly_weather(
-            current.strftime("%Y-%m-%d"),
-            chunk_end.strftime("%Y-%m-%d"),
-            lat=lat,
-            lon=lon,
-            timezone=timezone,
-        )
-        hourly = payload.get("hourly")
-        if hourly:
-            frame = pd.DataFrame(
-                {
-                    "timestamp": pd.to_datetime(hourly["time"]),
-                    "temperature_c": hourly.get("temperature_2m"),
-                    "humidity_pct": hourly.get("relative_humidity_2m"),
-                    "precipitation_mm": hourly.get("precipitation"),
-                }
+        # Split cross-over chunks so past dates hit the archive API and present/future dates use forecast.
+        today = pd.Timestamp.utcnow().date()
+        splits: List[Tuple[str, str]] = []
+        if current < today <= chunk_end:
+            splits.append((current.strftime("%Y-%m-%d"), (today - timedelta(days=1)).strftime("%Y-%m-%d")))
+            splits.append((today.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")))
+        else:
+            splits.append((current.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")))
+
+        for start_str, end_str in splits:
+            payload, latency_ms = _request_hourly_weather(
+                start_str,
+                end_str,
+                lat=lat,
+                lon=lon,
+                timezone=timezone,
+                mode="archive" if pd.to_datetime(end_str).date() < today else "forecast",
             )
-            frames.append(frame)
-        total_latency += latency_ms
-        chunk_count += 1
+            hourly = payload.get("hourly")
+            if hourly:
+                frame = pd.DataFrame(
+                    {
+                        "timestamp": pd.to_datetime(hourly["time"]),
+                        "temperature_c": hourly.get("temperature_2m"),
+                        "humidity_pct": hourly.get("relative_humidity_2m"),
+                        "precipitation_mm": hourly.get("precipitation"),
+                    }
+                )
+                frames.append(frame)
+            total_latency += latency_ms
+            chunk_count += 1
         current = chunk_end + timedelta(days=1)
 
     if not frames:
