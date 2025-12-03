@@ -13,16 +13,16 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
-from frontend.streamlit_app.services.data_utils import build_enriched_history  # noqa: E402
+from frontend.streamlit_app.services.data_utils import DATA_FILE, build_enriched_history  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train and persist Refuel demand models")
     parser.add_argument(
         "--csv",
-        default=ROOT / "data" / "gym_badges_0630_2200_long.csv",
+        default=DATA_FILE,
         type=Path,
-        help="Path to the telemetry CSV (default: data/gym_badges_0630_2200_long.csv)",
+        help=f"Path to the telemetry CSV (default: {DATA_FILE})",
     )
     parser.add_argument(
         "--model-dir",

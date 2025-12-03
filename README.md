@@ -13,7 +13,7 @@ pip install -r requirements.txt
 streamlit run frontend/streamlit_app/Home.py
 ```
 
-Drop your gym telemetry CSV into `data/gym_badges.csv`, then toggle “Use live weather API” inside the app to pull Open-Meteo context automatically.
+Drop your gym telemetry CSV into `data/gym_checkins_stgallen_2025_patterned.csv` (or keep using `data/gym_badges*.csv`), then toggle “Use live weather API” inside the app to pull Open-Meteo context automatically.
 
 To refresh backend datasets:
 
@@ -44,7 +44,7 @@ python backend/app/services/pipeline.py
 
 ## Data Inputs & Persistence
 
-- **Gym telemetry** – Drop hourly badge exports into `data/gym_badges_0630_2200_long.csv` (preferred) or `data/gym_badges.csv`. The loader auto-detects the first file it finds and enriches it with synthetic or live weather before the dashboard renders anything.
+- **Gym telemetry** – Drop hourly badge exports into `data/gym_checkins_stgallen_2025_patterned.csv` (preferred) or the legacy `data/gym_badges*.csv`. The loader auto-detects the first file it finds and enriches it with synthetic or live weather before the dashboard renders anything.
 - **Product mix planning** – Keep daily merchandising guidance in `data/product_mix_daily.csv`. At runtime the app uses `build_daily_product_mix_view()` to merge that daily plan with aggregated telemetry so you can compare suggested units vs. implied demand without mutating the raw sources.
 - **Snapshots** – Use the “Save snapshot” button in the dashboard’s Product Mix section to persist the merged view (including gaps and implied units) to `data/product_mix_enriched.csv`. Any Streamlit page or external notebook can reload it through `load_product_mix_snapshot()` for reproducible reviews.
 - **POS console + restocks** – `data/pos_runtime_log.csv` captures every entry with per-product breakdowns and shelf stock. Auto restock preferences live in `data/restock_policy.json` and can be managed from the POS Console.
@@ -85,7 +85,7 @@ python backend/app/services/pipeline.py
 - The Settings page exposes weather API latency, credentials placeholders, and webhook status.
 - Forecast Explorer features coefficient breakdowns, residual diagnostics, and correlation heatmaps to understand drivers.
 - POS Console defaults to the product catalog detected in `data/product_mix_daily.csv` (with a sensible fallback list) so staff can log SKU-level sales quickly.
-- If you need to prime the ML models outside of Streamlit, run `python backend/app/services/ml/train_demand_model.py --csv data/gym_badges_0630_2200_long.csv`.
+- If you need to prime the ML models outside of Streamlit, run `python backend/app/services/ml/train_demand_model.py --csv data/gym_checkins_stgallen_2025_patterned.csv`.
 
 ## Links
 

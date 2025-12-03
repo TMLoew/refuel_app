@@ -2,7 +2,7 @@
 """
 Build a daily product mix for Refuel from gym data + weather.
 Inputs:
-  - data/gym_badges_0630_2200_long.csv (15-min gym data)
+  - data/gym_checkins_stgallen_2025_patterned.csv (hourly St. Gallen check-ins) or gym_badges CSVs
   - optional data/weather_stgallen_hourly.csv (pre-synced hourly weather)
 Outputs:
   - data/product_mix_daily.csv (daily plan per product)
@@ -19,6 +19,11 @@ LAT, LON = 47.4245, 9.3767
 
 # Products we care about
 PRODUCTS = ["Protein Shake", "Electrolyte Drink", "Iced Matcha", "Recovery Smoothie", "Isotonic Lemon"]
+DEFAULT_GYM_PATHS = [
+    Path("data/gym_checkins_stgallen_2025_patterned.csv"),
+    Path("data/gym_badges_0630_2200_long.csv"),
+    Path("data/gym_badges.csv"),
+]
 
 def month_to_season(month: int) -> str:
     if month in (12, 1, 2): return "Winter"
@@ -65,6 +70,16 @@ def recommend_mix(temp_max_c: float, precip_mm: float, cardio_share: Optional[fl
     total = sum(base.values())
     return {k: round(v/total, 4) for k, v in base.items()}
 
+
+def resolve_gym_csv_path(csv_path: Optional[str]) -> Path:
+    """Pick the first available gym CSV (new patterned file preferred)."""
+    if csv_path:
+        return Path(csv_path)
+    for candidate in DEFAULT_GYM_PATHS:
+        if candidate.exists():
+            return candidate
+    return DEFAULT_GYM_PATHS[1]
+
 def fetch_daily_weather_range(start_date: str, end_date: str, lat: float = LAT, lon: float = LON) -> pd.DataFrame:
     """
     Get daily max temperature + precipitation for [start_date, end_date] (Europe/Zurich).
@@ -101,16 +116,16 @@ def fetch_daily_weather_range(start_date: str, end_date: str, lat: float = LAT, 
         })
     return df
 
-def load_gym_daily(csv_path: str) -> pd.DataFrame:
+def load_gym_daily(csv_path: Optional[str] = None) -> pd.DataFrame:
     """
     From your 15-min gym CSV, build per-day:
       - visitors = sum(checkins)
       - cardio_share = treadmill_sessions / checkins
     Falls back sensibly if columns are missing.
     """
-    p = Path(csv_path)
+    p = resolve_gym_csv_path(csv_path)
     if not p.exists():
-        raise FileNotFoundError(f"Gym CSV not found: {csv_path}")
+        raise FileNotFoundError(f"Gym CSV not found: {p}")
 
     df = pd.read_csv(p)
     ts_col = "ts_local" if "ts_local" in df.columns else ("ts_local_naive" if "ts_local_naive" in df.columns else None)
@@ -136,7 +151,7 @@ def load_gym_daily(csv_path: str) -> pd.DataFrame:
     return visitors.merge(cardio, on="date", how="left")
 
 def build_product_mix(
-    gym_csv_path: str = "data/gym_badges_0630_2200_long.csv",
+    gym_csv_path: Optional[str] = None,
     out_csv_path: str = "data/product_mix_daily.csv",
     base_conversion: float = 0.35,  # % of visitors who buy a drink
     weather_hourly_csv: Optional[str] = "data/weather_stgallen_hourly.csv",
