@@ -63,7 +63,8 @@ with st.sidebar:
     weather_profile = st.selectbox("Weather scenario override", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
     manual_temp_shift = st.slider("Manual temperature shift (°C)", -6, 6, 0, key="forecast-temp-shift")
     manual_precip_shift = st.slider("Manual precipitation shift (mm)", -2.0, 2.0, 0.0, step=0.1, key="forecast-precip-shift")
-    horizon_hours = st.slider("Forecast horizon (hours)", 6, 72, 48, step=6, key="forecast-horizon")
+    max_horizon = 168  # allow longer runs; beyond live weather will use historical patterns
+    horizon_hours = st.slider("Forecast horizon (hours)", 6, max_horizon, 72, step=6, key="forecast-horizon")
     with st.expander("Scenario levers", expanded=True):
         event_intensity = st.slider("Event intensity", 0.2, 2.5, 1.0, 0.1, key="forecast-event")
         marketing_boost_pct = st.slider("Marketing boost (%)", 0, 80, 10, 5, key="forecast-marketing")
@@ -122,6 +123,8 @@ scenario_config = {
     "use_live_weather": use_weather_api,
 }
 forecast_df = build_scenario_forecast(data, models, scenario_config)
+applied_horizon = forecast_df.attrs.get("applied_horizon_hours", horizon_hours) if not forecast_df.empty else 0
+live_weather_hours = forecast_df.attrs.get("live_weather_hours")
 
 col_a, col_b, col_c = st.columns(3)
 col_a.metric("Latest check-ins/hr", f"{scenario_history['checkins'].iloc[-1]:.0f}")
@@ -132,12 +135,14 @@ st.divider()
 if forecast_df.empty:
     st.warning("Need more telemetry to compute the forward forecast. Upload additional history first.")
 else:
-    st.subheader(f"Scenario forecast · next {horizon_hours} hours")
+    if use_weather_api and live_weather_hours:
+        st.caption(f"Live weather used for the first {live_weather_hours} hours; remaining horizon uses historical patterns.")
+    st.subheader(f"Scenario forecast · next {applied_horizon} hours")
     hover_tip(
         "ℹ️ Regression math",
         "Forecast lines come from two linear regressions: check-ins = β·features, snacks = γ·features. Slider tweaks shift the feature inputs before inference.",
     )
-    history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=horizon_hours + 24)][
+    history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=applied_horizon + 24)][
         ["timestamp", "checkins", "snack_units"]
     ].copy()
     history_window.rename(
@@ -293,7 +298,7 @@ else:
         else "Auto restock OFF · configure on the POS Console to automate stock protection."
     )
     st.info(
-        f"{auto_caption} · This scenario expects {total_units:.0f} snack units over the next {horizon_hours} hours.",
+        f"{auto_caption} · This scenario expects {total_units:.0f} snack units over the next {applied_horizon} hours.",
         icon="ℹ️",
     )
     if 'plan_payload' in locals() and not plan_payload.empty:
@@ -314,7 +319,7 @@ else:
                 "plan_generated_at": generated_at,
                 "plan_source": "Forecast Explorer",
                 "plan_weather_pattern": weather_profile,
-                "plan_horizon_hours": f"{horizon_hours}",
+                "plan_horizon_hours": f"{applied_horizon}",
                 "plan_temp_manual": f"{manual_temp_shift}",
                 "plan_precip_manual": f"{manual_precip_shift}",
                 "plan_event_intensity": f"{event_intensity}",

@@ -428,6 +428,11 @@ def build_scenario_forecast(
         except Exception:
             live_weather = pd.DataFrame()
         if not live_weather.empty:
+            live_weather_end = pd.to_datetime(live_weather["timestamp"].max())
+            future.attrs["live_weather_end"] = live_weather_end.isoformat()
+            future.attrs["live_weather_hours"] = int(
+                (live_weather_end - future_index[0]).total_seconds() // 3600 + 1
+            )
             future = future.merge(live_weather, on="timestamp", how="left", suffixes=("", "_live"))
             for col in ["temperature_c", "precipitation_mm", "humidity_pct"]:
                 live_col = f"{col}_live"
@@ -468,6 +473,8 @@ def build_scenario_forecast(
         None,
     )
     future["pred_snack_revenue"] = future["pred_snack_units"] * future["snack_price"]
+    future.attrs["applied_horizon_hours"] = len(future)
+    future.attrs["requested_horizon_hours"] = horizon
     return future
 
 
