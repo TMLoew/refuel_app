@@ -29,10 +29,10 @@ Files the app expects:
 ## Data and models
 
 - Everything is file-based and readable: product mix, prices, POS log, procurement plan, and restock policy all live in `data/`.
-- Forecasts use lightweight tree models saved to `model/checkins_hgb.joblib` and `model/snacks_hgb.joblib`; retrain from the Data Workbench after changing data.
+- Forecasts use small scikit-learn models (decision-tree ensembles) saved to `model/checkins_hgb.joblib` and `model/snacks_hgb.joblib`. They learn simple links between weather/price/promo settings and demand. Retrain from the Data Workbench after you change the CSVs.
 - Weather is either pulled live or loaded from the cached CSV so the app works offline.
 
-## Handy scripts (optional)
+## Scripts (optional)
 
 - Align telemetry with weather: `python backend/app/services/weather_service.py`
 - Rebuild product mix CSV: `python backend/app/services/pipeline.py`

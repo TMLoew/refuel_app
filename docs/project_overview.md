@@ -99,12 +99,12 @@ Everything is human-readable. If a file is missing, most pages will show an erro
 
 ---
 
-## 8) Tips while coding
+## 8) Coding notes
 
-- Use `st.session_state` for values that should persist between reruns (e.g., whether autopilot is running).
-- Always write through helpers in `data_utils.py` so files stay consistent.
-- If a required file is missing, show `st.error` and stop early; do not crash the app.
-- Keep functions small and side-effect free when possible to make future testing easy.
+- Use `st.session_state` for values that should persist between reruns (for example, the autopilot running flag).
+- Write through helpers in `data_utils.py` so files stay consistent.
+- If a required file is missing, show `st.error` and stop early.
+- Keep functions small and side-effect free to make later testing straightforward.
 
 ---
 
@@ -129,4 +129,4 @@ Everything is human-readable. If a file is missing, most pages will show an erro
 | **Safety stock** | A buffer level where we warn before running out. |
 | **Autopilot** | A simple loop that steps through the forecast and proposes when to reorder. |
 
-Keep this guide updated as you add features. If a step feels unclear, rewrite it in your own words until a new contributor could follow it without extra help.
+Update this guide whenever flows or datasets change so new contributors can follow along.
