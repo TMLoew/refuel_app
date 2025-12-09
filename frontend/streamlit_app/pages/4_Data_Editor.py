@@ -25,15 +25,15 @@ st.set_page_config(page_title="Data Workbench", page_icon=PAGE_ICON, layout="wid
 
 render_top_nav("4_Data_Editor.py")
 st.title("Data Workbench")
-st.caption("Inspect, annotate, and experiment with the telemetry tables feeding the dashboards.")
+st.caption("Swap in a new CSV, spot-check rows, and retrain the forecasts.")
 
 st.subheader("Upload replacement data")
-uploaded = st.file_uploader("Drop a new `gym_badges.csv` to preview it instantly", type=["csv"])
+uploaded = st.file_uploader("Drop a new `gym_badges.csv` to preview it", type=["csv"])
 if uploaded:
     new_df = pd.read_csv(uploaded)
     st.success(f"Loaded {len(new_df)} rows from your upload.")
     st.dataframe(new_df.head(20), use_container_width=True)
-    st.caption(f"Active dataset path: `{DATA_FILE}`")
+    st.caption(f"This will replace: `{DATA_FILE}`")
     if st.button("Make this the live dataset", type="primary"):
         try:
             DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -41,7 +41,7 @@ if uploaded:
         except Exception as exc:  # pragma: no cover - streamlit interaction
             st.error(f"Could not save file: {exc}")
         else:
-            st.success("Saved. Refresh the app to rebuild dashboards with the new data.")
+            st.success("Saved. Refresh the app to rebuild dashboards on this file.")
 
 with st.sidebar:
     sidebar_info_block()
@@ -87,7 +87,7 @@ st.download_button(
 )
 
 st.subheader("Forecast model lifecycle")
-st.caption("Retrain the ML models on the current dataset without leaving this page.")
+st.caption("Update the forecast models to match the current data.")
 retrain_cols = st.columns([0.4, 0.6])
 with retrain_cols[0]:
     retrain_clicked = st.button("🔄 Retrain models on current data", type="primary")

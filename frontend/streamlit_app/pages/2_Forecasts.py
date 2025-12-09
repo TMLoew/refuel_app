@@ -51,33 +51,33 @@ PAGE_ICON = get_logo_path() or "🔮"
 st.set_page_config(page_title="Forecast Explorer", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("2_Forecasts.py")
-st.title("Forecast Explorer")
-st.caption("Dig into the regression models, understand residuals, and inspect sensitivities before committing to a plan.")
+st.title("Forecasts")
+st.caption("See how many visits and snacks to expect, then push a plan for ordering.")
 
 with st.sidebar:
     sidebar_info_block()
-    st.subheader("Data slice")
-    use_weather_api = st.toggle("Use live weather API", value=True, key="forecast-weather")
-    lookback_days = st.slider("History window (days)", 3, 14, 7)
-    metric_focus = st.selectbox("Focus metric", ["checkins", "snack_units", "snack_revenue"])
-    weather_profile = st.selectbox("Weather scenario override", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
-    manual_temp_shift = st.slider("Manual temperature shift (°C)", -6, 6, 0, key="forecast-temp-shift")
-    manual_precip_shift = st.slider("Manual precipitation shift (mm)", -2.0, 2.0, 0.0, step=0.1, key="forecast-precip-shift")
+    st.subheader("Forecast setup")
+    use_weather_api = st.toggle("Use live weather", value=True, key="forecast-weather")
+    lookback_days = st.slider("Look at past (days)", 3, 14, 7)
+    metric_focus = st.selectbox("What to focus on", ["checkins", "snack_units", "snack_revenue"])
+    weather_profile = st.selectbox("Weather type", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
+    manual_temp_shift = st.slider("Nudge temperature (°C)", -6, 6, 0, key="forecast-temp-shift")
+    manual_precip_shift = st.slider("Nudge rain (mm)", -2.0, 2.0, 0.0, step=0.1, key="forecast-precip-shift")
     max_horizon = 168  # allow longer runs; beyond live weather will use historical patterns
-    horizon_hours = st.slider("Forecast horizon (hours)", 6, max_horizon, 72, step=6, key="forecast-horizon")
+    horizon_hours = st.slider("How far ahead (hours)", 6, max_horizon, 72, step=6, key="forecast-horizon")
     with st.expander("Scenario levers", expanded=True):
-        event_intensity = st.slider("Event intensity", 0.2, 2.5, 1.0, 0.1, key="forecast-event")
-        marketing_boost_pct = st.slider("Marketing boost (%)", 0, 80, 10, 5, key="forecast-marketing")
-        snack_price_change = st.slider("Snack price change (%)", -30, 40, 0, 5, key="forecast-price")
+        event_intensity = st.slider("Expected gym buzz", 0.2, 2.5, 1.0, 0.1, key="forecast-event", help="Higher = busy period, lower = quiet day.")
+        marketing_boost_pct = st.slider("Promo boost (%)", 0, 80, 10, 5, key="forecast-marketing")
+        snack_price_change = st.slider("Price change (%)", -30, 40, 0, 5, key="forecast-price")
     with st.expander("Snacks ↔ visits settings", expanded=False):
         snack_agg_mode = st.radio("Aggregation", ["Hourly", "Daily"], horizontal=True, key="snack-agg")
         color_dim = st.selectbox(
-            "Color points by",
+            "Color chart by",
             ["weekday", "weather_label", "is_weekend"],
             index=0,
             key="snack-color",
         )
-        min_checkins = st.slider("Min. check-ins to include", 0, 50, 5, key="snack-min-checkins")
+        min_checkins = st.slider("Ignore hours under this many visits", 0, 50, 5, key="snack-min-checkins")
 
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
@@ -108,9 +108,7 @@ demand_factor = 1 + 0.015 * (scenario["temp_offset"] + manual_temp_shift) - 0.05
 visit_factor = 1 + 0.01 * (scenario["temp_offset"] + manual_temp_shift) - 0.04 * (scenario["precip_multiplier"] - 1)
 scenario_history["snack_units"] = np.clip(scenario_history["snack_units"] * demand_factor, 0, None)
 scenario_history["checkins"] = np.clip(scenario_history["checkins"] * visit_factor, 0, None)
-st.caption(
-    f"Applied '{weather_profile}' scenario with temperature shift {manual_temp_shift:+}°C across the analysis views."
-)
+st.caption(f"Using the '{weather_profile}' weather type with simple temp/rain nudges.")
 
 scenario_config = {
     "horizon_hours": horizon_hours,
@@ -136,11 +134,11 @@ if forecast_df.empty:
     st.warning("Need more telemetry to compute the forward forecast. Upload additional history first.")
 else:
     if use_weather_api and live_weather_hours:
-        st.caption(f"Live weather used for the first {live_weather_hours} hours; remaining horizon uses historical patterns.")
-    st.subheader(f"Scenario forecast · next {applied_horizon} hours")
+        st.caption(f"Live weather for the first {live_weather_hours} hours; after that we extend using past patterns.")
+    st.subheader(f"Forecast for the next {applied_horizon} hours")
     hover_tip(
-        "ℹ️ Regression math",
-        "Forecast lines come from two linear regressions: check-ins = β·features, snacks = γ·features. Slider tweaks shift the feature inputs before inference.",
+        "How this works",
+        "We look at past visits, snacks, prices, and weather. The sliders nudge those inputs to show what could happen next.",
     )
     history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=applied_horizon + 24)][
         ["timestamp", "checkins", "snack_units"]
@@ -303,10 +301,10 @@ else:
     )
     if 'plan_payload' in locals() and not plan_payload.empty:
         with st.expander("Procurement actions", expanded=True):
-            st.caption("Push this scenario into the shared procurement plan for downstream tabs.")
+            st.caption("Send this plan to the shared procurement file.")
             hover_tip(
-                "ℹ️ Plan math",
-                "The exported CSV includes daily forecast units plus the scenario metadata (weather and price shifts) so downstream tabs can reproduce the assumptions.",
+                "What gets saved",
+                "We save the daily totals, per-product suggestions, and the scenario choices you made here.",
             )
             generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             last_plan = load_procurement_plan()

@@ -33,8 +33,8 @@ PAGE_ICON = get_logo_path() or "📈"
 st.set_page_config(page_title="Statistics", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("6_Statistics.py")
-st.title("Analytics & Drivers")
-st.caption("Readable, decision-ready analytics that link weather to gym traffic and snack pull-through.")
+st.title("Trends & Drivers")
+st.caption("Simple views that show how weather and visits move your snack sales.")
 
 with st.sidebar:
     sidebar_info_block()
@@ -58,17 +58,17 @@ if window_df.empty:
 
 metrics_row = window_df.tail(1).iloc[0]
 col_a, col_b, col_c, col_d = st.columns(4)
-col_a.metric("Latest temperature", f"{metrics_row['temperature_c']:.1f}°C", "Live weather feed")
-col_b.metric("Daily rainfall", f"{window_df['precipitation_mm'].tail(96).sum():.1f} mm", "Past 24h")
-col_c.metric("Check-ins (24h)", f"{window_df['checkins'].tail(96).sum():.0f}", "Footfall")
-col_d.metric("Snack units (24h)", f"{window_df['snack_units'].tail(96).sum():.0f}", "POS volume")
+col_a.metric("Latest temperature", f"{metrics_row['temperature_c']:.1f}°C", "Now")
+col_b.metric("Daily rainfall", f"{window_df['precipitation_mm'].tail(96).sum():.1f} mm", "Past day")
+col_c.metric("Check-ins (24h)", f"{window_df['checkins'].tail(96).sum():.0f}", "Past day")
+col_d.metric("Snack units (24h)", f"{window_df['snack_units'].tail(96).sum():.0f}", "Past day")
 
 overview_tab, drivers_tab, regression_tab, rhythm_tab = st.tabs(
     ["Overview", "Drivers", "Regression", "Daily rhythm"]
 )
 
 with overview_tab:
-    st.subheader("Correlation snapshot")
+    st.subheader("Quick relationships")
     corr_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
     corr_matrix = window_df[corr_cols].corr()
     corr_fig = px.imshow(
@@ -93,15 +93,15 @@ with overview_tab:
     st.markdown("**Strongest moves in this window:** " + " · ".join(bullets))
     hover_tip(
         "How to read this",
-        "r values near +1 mean they rise together; near -1 means they move opposite; near 0 means weak linkage.",
+        "Closer to +1 means they rise together, closer to -1 means one rises when the other falls.",
     )
 
     st.info(
-        "Use this overview to check if the live feed matches your mental model (e.g., warm and dry days should lift check-ins)."
+        "Use this to sanity-check: do warm, dry days lift visits and snacks as expected?"
     )
 
 with drivers_tab:
-    st.subheader("Pairwise relationships")
+    st.subheader("How pairs of things move")
     pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
     pair_fig = px.scatter_matrix(
         window_df,
@@ -142,12 +142,12 @@ with drivers_tab:
         use_container_width=True,
     )
     st.markdown(
-        "- Warmer days tilt the attendance cloud upward; weekend points sit higher.\n"
-        "- Rain pulls snack units down unless classified as a light shower."
+        "- Warmer days mean more visits, especially on weekends.\n"
+        "- Heavy rain usually lowers snack units unless it's just a light shower."
     )
 
 with regression_tab:
-    st.subheader("Quick regression readout")
+    st.subheader("Quick impact readout")
     reg_df = window_df[["checkins", "snack_units", "temperature_c", "precipitation_mm", "is_weekend"]].copy()
     reg_df["is_weekend"] = reg_df["is_weekend"].astype(float)
 
@@ -167,13 +167,13 @@ with regression_tab:
     st.dataframe(coef_table, use_container_width=True)
 
     st.markdown(
-        "- `β` columns show how much the outcome changes per unit of the predictor (holding the others steady).\n"
-        "- `p` values < 0.05 suggest the signal is unlikely to be noise.\n"
-        "- Temperature usually lifts both attendance and snacks; precipitation often works the opposite way."
+        "- Bigger absolute numbers mean a bigger push up or down.\n"
+        "- Small p-values (<0.05) mean the effect is likely real.\n"
+        "- Heat lifts visits and snacks; steady rain pulls them down."
     )
 
 with rhythm_tab:
-    st.subheader("Daily rhythm")
+    st.subheader("Day by day")
     daily = (
         window_df.set_index("timestamp")
         .resample("D")
@@ -188,11 +188,9 @@ with rhythm_tab:
         title="Daily trend of weather, traffic, and snacks",
     )
     st.plotly_chart(daily_fig, use_container_width=True)
-    st.markdown(
-        "Blend this with staffing and procurement plans: match crew and replenishment to the next upturn."
-    )
+    st.markdown("Use this to line up staffing and replenishment with the next upswing.")
 
 st.success(
-    "Analytics now speak plainly: start at Overview to see if live correlations look right, jump to Drivers to see the shape of the data, then use Regression to quantify impact before you run what-if tests or automation."
+    "Read this page top to bottom: check the quick moves, see the point clouds, confirm the impact table, then glance at day-by-day trends."
 )
 render_footer()
