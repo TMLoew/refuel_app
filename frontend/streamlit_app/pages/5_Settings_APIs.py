@@ -249,13 +249,13 @@ def advance_autopilot_block(
 
 
 def render_autopilot_panel(data: pd.DataFrame, use_live_weather: bool) -> None:
-    st.subheader("Weather-aware autopilot")
+st.subheader("Weather-aware autopilot")
     if data.empty:
         st.warning("Need telemetry to simulate autopilot scenarios. Upload a CSV first.")
         return
     models = train_models(data)
     if not models or models[0] is None or models[1] is None:
-        st.warning("Need more telemetry to train the forecast models. Revisit after uploading additional data.")
+        st.warning("Need more data to train the forecast models. Upload more rows, then try again.")
         return
 
     daily_summary = (
@@ -391,7 +391,7 @@ def render_autopilot_panel(data: pd.DataFrame, use_live_weather: bool) -> None:
     autop_history = st.session_state["autopilot_history"]
     autop_status = "Running" if st.session_state["autopilot_running"] else "Paused"
     st.caption(
-        f"Status: **{autop_status}** · data persisted to `{AUTOPILOT_STATE_FILE.name}` (share this CSV or reload it later)."
+        f"Status: **{autop_status}** · data is saved to `{AUTOPILOT_STATE_FILE.name}` so you can reopen it later."
     )
 
     if autop_history.empty:
@@ -464,7 +464,7 @@ st.set_page_config(page_title="Settings & APIs", page_icon=PAGE_ICON, layout="wi
 
 render_top_nav("5_Settings_APIs.py")
 st.title("Settings & API Console")
-st.caption("Manage external data hooks, monitor credentials, and run quick health checks.")
+st.caption("Manage weather settings, quick health checks, and simple automation controls.")
 active_env = "Default"
 
 with st.sidebar:
@@ -502,8 +502,8 @@ else:
     weather_delta = "no API calls yet"
 
 # Model lifecycle
-st.subheader("Forecast model lifecycle")
-st.caption("Retrain the ML models on the currently loaded dataset (overwrites persisted joblibs).")
+st.subheader("Forecast models")
+st.caption("Retrain the saved models on the current dataset (overwrites the joblib files).")
 retrain_cols = st.columns([0.4, 0.6])
 with retrain_cols[0]:
     retrain_clicked = st.button("🔄 Retrain models on current data", type="primary")

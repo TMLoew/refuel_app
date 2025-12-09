@@ -72,7 +72,7 @@ st.set_page_config(page_title="POS Console", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("7_POS_Console.py")
 st.title("POS Console")
-st.caption("Log live sales + check-ins at the counter and receive instant low stock alerts & forecasts.")
+st.caption("Log sales and check-ins, keep shelf stock updated, and get quick low-stock warnings.")
 
 with st.sidebar:
     sidebar_info_block()
@@ -104,7 +104,7 @@ with col_form:
     st.subheader("Log POS activity")
     if latest_stock is None and not st.session_state.get("pos_stock_tip_dismissed"):
         st.info(
-            "Heads-up: please enter the current shelf stock for your first POS entry so we can auto-track it afterwards."
+            "Enter the current shelf stock for your first POS entry so the app can track it from then on."
         )
     with st.form("pos-entry"):
         now = datetime.now()
@@ -140,13 +140,12 @@ with col_form:
                 min_value=0,
                 value=50,
                 step=1,
-                help="Needed for the very first log entry so we can track stock going forward.",
+                help="Needed for the first log so we can track stock going forward.",
             )
         else:
             baseline_stock = latest_stock
             st.caption(
-                f"Baseline stock auto-filled from the last reading ({baseline_stock:.0f} units). "
-                "We will subtract the sales you log below."
+                f"Baseline stock auto-filled from the last reading ({baseline_stock:.0f} units). Sales logged below will subtract from this."
             )
         notes = st.text_input("Notes / special context", "")
         submitted = st.form_submit_button("Log entry", use_container_width=True)
@@ -168,7 +167,7 @@ with col_form:
             }
         )
         st.success(
-            f"Entry captured. Auto-updated shelf stock to {stock_remaining:.0f} units after sales & restocks."
+            f"Entry saved. Shelf stock updated to {stock_remaining:.0f} units after sales and restocks."
         )
         log_df = load_pos_log()
         restock_policy = load_restock_policy()
@@ -192,7 +191,7 @@ with col_form:
             )
             restock_policy = mark_auto_restock(restock_policy)
             st.warning(
-                f"Auto restock triggered (+{lot_size} units). Shelf stock reset to {auto_stock:.0f} units.",
+                f"Auto restock triggered (+{lot_size} units). Shelf stock now {auto_stock:.0f} units.",
                 icon="⚠️",
             )
             log_df = load_pos_log()
@@ -234,7 +233,7 @@ with col_alert:
     next_restock_date = (datetime.now() + timedelta(days=reorder_days)).date()
     st.metric("Next planned restock", next_restock_date.strftime("%Y-%m-%d"), f"every {reorder_days} d")
     with st.expander("Auto restock policy", expanded=False):
-        st.caption("Automatically logs a restock entry when stock dips below the configured floor.")
+        st.caption("Automatically logs a restock entry when stock dips below the floor you set.")
         auto_enabled = st.checkbox(
             "Enable auto restock",
             value=restock_policy.get("auto_enabled", False),
@@ -310,7 +309,7 @@ with col_alert:
         st.metric("Latest stock reading", f"{latest_stock:.0f} units", help="From the most recent POS entry.")
         if latest_stock < safety_floor:
             st.error(
-                f"LOW STOCK! Current level {latest_stock:.0f} < recommended floor {safety_floor:.0f}. Trigger a reorder now."
+                f"Low stock. Current level {latest_stock:.0f} < recommended floor {safety_floor:.0f}. Reorder now."
             )
         else:
             st.success(f"Stock is healthy. Recommended floor: {safety_floor:.0f} units.")

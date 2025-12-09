@@ -458,13 +458,13 @@ def render_dashboard() -> None:
     render_top_nav("1_Dashboard.py", show_logo=False)
     st.title("Refuel Home")
     st.caption(
-        "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."
+        "Simple view of weather, gym traffic, and snacks so you can plan stock and pricing."
     )
 
     with st.sidebar:
         sidebar_info_block()
         st.subheader("Scenario controls")
-        use_weather_api = st.toggle("Use live weather API", value=True)
+        use_weather_api = st.toggle("Use live weather", value=True, help="Pulls Open-Meteo if available; otherwise uses saved data.")
 
     with st.spinner("Loading telemetry and contextual data..."):
         data = load_enriched_data(use_weather_api=use_weather_api)
@@ -536,15 +536,14 @@ def render_dashboard() -> None:
     recent_window = data.tail(24)
     render_quick_actions(recent_window)
     st.info(
-        "Use the quick actions above or the sidebar to jump into specific tools. "
-        "The controls here mirror the data slice used inside each module."
+        "Use the quick buttons or the sidebar sliders to open tools. The settings here match what those pages use."
     )
     st.subheader("How Refuel Works")
     st.markdown(
         """
-1. **Sync telemetry** – Drop your latest gym+snack CSV into `data/`, then toggle live weather to merge Open-Meteo forecasts.
-2. **Model demand** – Train lightweight regressors that power the Dashboard, Forecast Explorer, and POS alerts.
-3. **Act** – Use scenario sliders to publish procurement plans and adjust SKU prices in the Price Manager.
+1. **Add data** – Put your newest gym+snack CSV in `data/`, turn on live weather if you want.
+2. **Run models** – The app trains simple models to forecast check-ins and snack units.
+3. **Take action** – Use sliders, POS, and Price Manager to export plans and set prices.
 """
     )
 
@@ -552,7 +551,7 @@ def render_dashboard() -> None:
     render_history_charts(data)
     st.subheader("Weather shotcast")
     info_col, btn_col = st.columns([0.75, 0.25])
-    info_col.caption("Windy radar & cloud layers centered on the configured coordinates.")
+    info_col.caption("Windy map centered on your saved location.")
     if btn_col.button("Center on St. Gallen", key="shotcast-center-root"):
         save_weather_profile(
             {
@@ -576,7 +575,7 @@ def render_dashboard() -> None:
         days_old = (pd.Timestamp.now().normalize() - latest_mix_date.normalize()).days
         if days_old > 1:
             st.warning(
-                f"Product mix snapshot is {days_old} day(s) old. Update `data/product_mix_daily.csv` to reflect the latest plan."
+                f"Product mix snapshot is {days_old} day(s) old. Update `data/product_mix_daily.csv` to refresh the plan."
             )
         mix_cols = st.columns(3)
         mix_cols[0].metric("Snapshot date", latest_mix_date.strftime("%Y-%m-%d"))
@@ -721,11 +720,11 @@ def render_dashboard() -> None:
             )
         product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
         if not product_forecast.empty:
-            st.caption("Next 3 days · snack demand split by merchandise plan")
-            hover_tip(
-                "ℹ️ Mix allocation",
-                "Product-level forecast multiplies each day's total snack prediction by its mix weight: units_i = weight_i × total_pred_snacks.",
-            )
+        st.caption("Next 3 days · snack demand split by merchandise plan")
+        hover_tip(
+            "ℹ️ Mix allocation",
+            "Each day's total snack forecast is split by the mix weights: units_for_item = weight × total predicted snacks.",
+        )
             upcoming_dates = sorted(product_forecast["date"].unique())[:3]
             product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
             product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
@@ -748,7 +747,7 @@ def render_dashboard() -> None:
     st.subheader("What-if forecast")
     hover_tip(
         "ℹ️ Forecast math",
-        "Predictions come from two linear regressions: check-ins = β·features, snacks = γ·features (including weather shifts and events). Sliders alter the feature inputs before inference.",
+        "Predictions come from two simple linear models for check-ins and snacks. Sliders change the inputs before predicting.",
     )
     render_forecast_section(data, forecast_df)
 

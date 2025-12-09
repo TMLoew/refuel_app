@@ -25,7 +25,7 @@ st.set_page_config(page_title="Data Workbench", page_icon=PAGE_ICON, layout="wid
 
 render_top_nav("4_Data_Editor.py")
 st.title("Data Workbench")
-st.caption("Swap in a new CSV, spot-check rows, and retrain the forecasts.")
+st.caption("Swap in a new CSV, check a sample of rows, and retrain the simple forecasts.")
 
 st.subheader("Upload replacement data")
 uploaded = st.file_uploader("Drop a new `gym_badges.csv` to preview it", type=["csv"])
@@ -86,8 +86,8 @@ st.download_button(
     mime="text/csv",
 )
 
-st.subheader("Forecast model lifecycle")
-st.caption("Update the forecast models to match the current data.")
+st.subheader("Forecast models")
+st.caption("Retrain the lightweight models so they match the current data.")
 retrain_cols = st.columns([0.4, 0.6])
 with retrain_cols[0]:
     retrain_clicked = st.button("🔄 Retrain models on current data", type="primary")

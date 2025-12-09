@@ -34,7 +34,7 @@ st.set_page_config(page_title="Statistics", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("6_Statistics.py")
 st.title("Trends & Drivers")
-st.caption("Simple views that show how weather and visits move your snack sales.")
+st.caption("Simple views to show how weather and visits affect snack sales.")
 
 with st.sidebar:
     sidebar_info_block()
@@ -76,7 +76,7 @@ with overview_tab:
         text_auto=".2f",
         aspect="auto",
         color_continuous_scale=[CORAL, "#FFFFFF", PRIMARY_GREEN],
-        title="How variables move together (Pearson r)",
+        title="How variables move together",
     )
     st.plotly_chart(corr_fig, use_container_width=True)
     corr_pairs = (
@@ -93,7 +93,7 @@ with overview_tab:
     st.markdown("**Strongest moves in this window:** " + " · ".join(bullets))
     hover_tip(
         "How to read this",
-        "Closer to +1 means they rise together, closer to -1 means one rises when the other falls.",
+        "Closer to +1 means they rise together, closer to -1 means they move opposite, around 0 means little link.",
     )
 
     st.info(
@@ -167,9 +167,9 @@ with regression_tab:
     st.dataframe(coef_table, use_container_width=True)
 
     st.markdown(
-        "- Bigger absolute numbers mean a bigger push up or down.\n"
-        "- Small p-values (<0.05) mean the effect is likely real.\n"
-        "- Heat lifts visits and snacks; steady rain pulls them down."
+        "- Larger numbers mean a bigger push up or down.\n"
+        "- Small p-values hint the effect is likely real.\n"
+        "- Warmer temps lift visits/snacks; steady rain pulls them down."
     )
 
 with rhythm_tab:

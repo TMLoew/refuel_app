@@ -52,13 +52,13 @@ st.set_page_config(page_title="Forecast Explorer", page_icon=PAGE_ICON, layout="
 
 render_top_nav("2_Forecasts.py")
 st.title("Forecasts")
-st.caption("See how many visits and snacks to expect, then push a plan for ordering.")
+st.caption("See likely visits and snack demand, then publish a simple order plan.")
 
 with st.sidebar:
     sidebar_info_block()
     st.subheader("Forecast setup")
-    use_weather_api = st.toggle("Use live weather", value=True, key="forecast-weather")
-    lookback_days = st.slider("Look at past (days)", 3, 14, 7)
+    use_weather_api = st.toggle("Use live weather", value=True, key="forecast-weather", help="Falls back to cached weather if the API is offline.")
+    lookback_days = st.slider("Look at past (days)", 3, 14, 7, help="How many days of history to base the forecast on.")
     metric_focus = st.selectbox("What to focus on", ["checkins", "snack_units", "snack_revenue"])
     weather_profile = st.selectbox("Weather type", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
     manual_temp_shift = st.slider("Nudge temperature (°C)", -6, 6, 0, key="forecast-temp-shift")
@@ -81,7 +81,7 @@ with st.sidebar:
 
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
-    st.error("No telemetry CSV detected. Upload data via the Data Editor page first.")
+    st.error("No data found. Upload a telemetry CSV in the Data Workbench first.")
     st.stop()
 
 models = train_models(data)
@@ -138,7 +138,7 @@ else:
     st.subheader(f"Forecast for the next {applied_horizon} hours")
     hover_tip(
         "How this works",
-        "We look at past visits, snacks, prices, and weather. The sliders nudge those inputs to show what could happen next.",
+        "We look at past visits, snacks, prices, and weather. The sliders tweak those inputs to show what could happen next.",
     )
     history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=applied_horizon + 24)][
         ["timestamp", "checkins", "snack_units"]
@@ -225,10 +225,10 @@ else:
     if not daily_forecast.empty:
         st.subheader("Daily rollup & product mix impact")
         hover_tip(
-            "ℹ️ Daily aggregation math",
-            "Hourly predictions are summed per calendar day, then multiplied by each product's mix weight to allocate SKU-level units.",
+            "ℹ️ Daily math",
+            "Hourly predictions are summed per day, then split by mix weights to estimate units per product.",
         )
-        st.caption("Merges the scenario forecast with the merchandising guidance.")
+        st.caption("Joins the scenario forecast with the merch plan.")
         st.dataframe(
             daily_forecast.assign(date=daily_forecast["date"].dt.strftime("%Y-%m-%d"))[
                 ["date", "pred_checkins", "pred_snack_units", "pred_snack_revenue"]
@@ -304,7 +304,7 @@ else:
             st.caption("Send this plan to the shared procurement file.")
             hover_tip(
                 "What gets saved",
-                "We save the daily totals, per-product suggestions, and the scenario choices you made here.",
+                "We save the daily totals, product suggestions, and the scenario choices you set.",
             )
             generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             last_plan = load_procurement_plan()
@@ -385,7 +385,7 @@ corr_fig = px.imshow(
     text_auto=".2f",
     aspect="auto",
     color_continuous_scale="RdBu",
-    title="Correlation matrix: weather vs. demand",
+    title="How weather links to demand",
 )
 st.plotly_chart(corr_fig, use_container_width=True)
 
@@ -403,8 +403,8 @@ snack_df = snack_df[snack_df["checkins"] >= min_checkins]
 if not snack_df.empty:
     corr_value = snack_df["checkins"].corr(snack_df["snack_units"])
     st.subheader("Snack demand vs. visit load")
-    st.caption("Tune the controls in the sidebar to slice the correlation by aggregation or filters.")
-    st.metric("Pearson correlation", f"{corr_value:.2f}" if not pd.isna(corr_value) else "n/a")
+    st.caption("Adjust sidebar options to see how snacks and visits move together.")
+    st.metric("Correlation (snacks vs visits)", f"{corr_value:.2f}" if not pd.isna(corr_value) else "n/a")
     color_field = color_dim if color_dim in snack_df.columns else None
     scatter_fig = px.scatter(
         snack_df,
@@ -440,7 +440,7 @@ if checkin_model is not None:
             orientation="h",
             color=value_label,
             color_continuous_scale="RdBu",
-            title="Model feature influence",
+            title="Which inputs matter most",
         )
         impact_fig.update_layout(coloraxis_showscale=False)
         st.plotly_chart(impact_fig, use_container_width=True)
@@ -456,7 +456,7 @@ if checkin_model is not None:
         x="temperature_c",
         y="residuals_checkins",
         color="weather_label",
-        title="Residuals vs. temperature",
+        title="Prediction errors vs. temperature",
         trendline="ols",
         labels={"residuals_checkins": "Residual (actual - predicted)"},
     )

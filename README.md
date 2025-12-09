@@ -1,44 +1,47 @@
 # Refuel Operations Cockpit
 
-Refuel blends weather, gym attendance, and snack demand into one multipage Streamlit cockpit for merchandising, staffing, pricing, and procurement.
+Refuel is a Streamlit app that helps a gym shop plan snacks and drinks using simple forecasts, live weather, and a few editable CSV files.
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-streamlit run frontend/streamlit_app/Home.py
+streamlit run frontend/streamlit_app/App.py
 ```
 
-Drop your telemetry CSV into `data/gym_checkins_stgallen_2025_patterned.csv` (or `data/gym_badges*.csv`). In the app you can upload a replacement file and make it live, then retrain the ML models from the Data Workbench.
+Files the app expects:
 
-## Feature map
+- Telemetry: put your main CSV at `data/gym_checkins_stgallen_2025_patterned.csv` (or another `data/gym_badges*.csv` file). You can also upload a new file inside the app.
+- Models: saved under `model/`. They retrain from the Data Workbench page; no math background needed.
+- Weather cache: stored at `data/weather_cache.csv` if you turn on live weather.
 
-- Dashboard: live traffic, weather, mix tables, snapshot export.
-- Forecasts: scenario levers (weather, marketing, price), live weather option, procurement export, SKU rollup.
-- What‑If Lab: quick simulations for allocation and pricing tweaks.
-- Data Workbench: upload/preview/activate CSVs, inline data editor, retrain models on current data.
-- Settings: weather profile and health cards.
-- Statistics: correlation, scatter matrix, regression, daily rhythm tabs.
-- POS Console: SKU-level sales logging, stock tracking, auto restock guardrails.
-- Price Manager: adjust SKU prices feeding forecasts and mix.
-- Autopilot: procurement simulation with scenario metadata saved to `data/procurement_plan.csv`.
+## What you can do
 
-## Data & models
+- Dashboard: see current traffic, weather, and reorder advice.
+- Forecasts: move sliders for weather, marketing, and prices to see simple “what if” outcomes.
+- What‑If Lab: quick experiments for allocation and pricing.
+- Data Workbench: upload and edit CSVs before making them active.
+- POS Console: log sales/restocks and track stock.
+- Price Manager: update price lists that feed the forecasts.
+- Settings & Statistics: tweak weather profile and view basic charts.
+- Autopilot: run a basic procurement simulation and export a plan to `data/procurement_plan.csv`.
 
-- Telemetry loader auto-detects preferred datasets, enriches with live or cached Open‑Meteo weather, and writes cache to `data/weather_cache.csv`.
-- ML: HistGradientBoosting models for check-ins and snacks persist to `model/checkins_hgb.joblib` and `model/snacks_hgb.joblib`; retrain from Data Workbench when data changes.
-- Procurement, POS, and pricing artifacts live under `data/` (product mix, prices, restock policy, POS log, procurement plan, snapshots).
+## Data and models
 
-## Useful commands
+- Everything is file-based and readable: product mix, prices, POS log, procurement plan, and restock policy all live in `data/`.
+- Forecasts use lightweight tree models saved to `model/checkins_hgb.joblib` and `model/snacks_hgb.joblib`; retrain from the Data Workbench after changing data.
+- Weather is either pulled live or loaded from the cached CSV so the app works offline.
 
-- Fetch weather aligned to telemetry: `python backend/app/services/weather_service.py`
+## Handy scripts (optional)
+
+- Align telemetry with weather: `python backend/app/services/weather_service.py`
 - Rebuild product mix CSV: `python backend/app/services/pipeline.py`
 - Validate configs: `python scripts/validate_configs.py`
-- Train models via CLI: `python backend/app/services/ml/train_demand_model.py --csv data/gym_checkins_stgallen_2025_patterned.csv`
+- Train models from CLI: `python backend/app/services/ml/train_demand_model.py --csv data/gym_checkins_stgallen_2025_patterned.csv`
 
 ## Brand palette
 
-Colors used in UI and Plotly templates (hex only for reliable rendering):
+Colors used in UI and Plotly templates:
 
 - HSG Grün: `#00802F`
 - Rot: `#EB6969`
