@@ -64,7 +64,7 @@ with st.sidebar:
     manual_temp_shift = st.slider("Nudge temperature (°C)", -6, 6, 0, key="forecast-temp-shift")
     manual_precip_shift = st.slider("Nudge rain (mm)", -2.0, 2.0, 0.0, step=0.1, key="forecast-precip-shift")
     max_horizon = 168  # allow longer runs; beyond live weather will use historical patterns
-    horizon_hours = st.slider("How far ahead (hours)", 6, max_horizon, 72, step=6, key="forecast-horizon")
+    horizon_hours = st.slider("How far ahead (hours)", 6, max_horizon, 168, step=6, key="forecast-horizon")
     with st.expander("Scenario levers", expanded=True):
         event_intensity = st.slider("Expected gym buzz", 0.2, 2.5, 1.0, 0.1, key="forecast-event", help="Higher = busy period, lower = quiet day.")
         marketing_boost_pct = st.slider("Promo boost (%)", 0, 80, 10, 5, key="forecast-marketing")
@@ -78,6 +78,7 @@ with st.sidebar:
             key="snack-color",
         )
         min_checkins = st.slider("Ignore hours under this many visits", 0, 50, 5, key="snack-min-checkins")
+    st.caption("Up to 7 days ahead; forecasts get less reliable the further out you go.")
 
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
@@ -140,6 +141,7 @@ else:
         "How this works",
         "We look at past visits, snacks, prices, and weather. The sliders tweak those inputs to show what could happen next.",
     )
+    st.caption("Later hours are lower confidence; near-term rows lean on actual and live weather data first.")
     history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=applied_horizon + 24)][
         ["timestamp", "checkins", "snack_units"]
     ].copy()
@@ -189,6 +191,7 @@ else:
         )
     )
     forecast_fig.update_layout(
+        title=f"Forecast window: next {applied_horizon} hours",
         xaxis_title="Timestamp",
         yaxis_title="Check-ins",
         yaxis2=dict(title="Snack units", overlaying="y", side="right"),

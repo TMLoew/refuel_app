@@ -485,7 +485,8 @@ def render_dashboard() -> None:
 
     with st.sidebar:
         with st.expander("Weather & demand levers", expanded=True):
-            horizon_hours = st.slider("Forecast horizon (hours)", min_value=6, max_value=72, value=24, step=6)
+            horizon_hours = st.slider("Forecast horizon (hours)", min_value=6, max_value=168, value=24, step=6)
+            st.caption("Up to 7 days ahead; later hours are less reliable.")
             weather_pattern = st.selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()))
             temp_manual = st.slider("Manual temperature shift (°C)", min_value=-8, max_value=8, value=0)
             precip_manual = st.slider(
