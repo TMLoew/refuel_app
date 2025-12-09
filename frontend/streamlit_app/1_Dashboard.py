@@ -719,8 +719,8 @@ def render_dashboard() -> None:
                 height=280,
             )
         product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
-            if not product_forecast.empty:
-        st.caption("Next 3 days · snack demand split by merchandise plan")
+        if not product_forecast.empty:
+            st.caption("Next 3 days · snack demand split by merchandise plan")
         hover_tip(
             "ℹ️ Mix allocation",
             "Each day's total snack forecast is split by the mix weights: units_for_item = weight × total predicted snacks.",
