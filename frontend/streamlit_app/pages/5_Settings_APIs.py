@@ -21,6 +21,9 @@ from frontend.streamlit_app.components.layout import (
     render_footer,
     get_logo_path,
 )
+MODEL_DIR = ROOT_DIR / "model"
+CHECKIN_MODEL_FILE = MODEL_DIR / "checkins_hgb.joblib"
+SNACK_MODEL_FILE = MODEL_DIR / "snacks_hgb.joblib"
 try:
     from frontend.streamlit_app.services.data_utils import (
         load_enriched_data,
@@ -497,6 +500,42 @@ elif weather_meta:
 else:
     weather_value = "ℹ️ Pending"
     weather_delta = "no API calls yet"
+
+# Model lifecycle
+st.subheader("Forecast model lifecycle")
+st.caption("Retrain the ML models on the currently loaded dataset (overwrites persisted joblibs).")
+retrain_cols = st.columns([0.4, 0.6])
+with retrain_cols[0]:
+    retrain_clicked = st.button("🔄 Retrain models on current data", type="primary")
+with retrain_cols[1]:
+    st.caption(f"Model files: `{CHECKIN_MODEL_FILE.name}`, `{SNACK_MODEL_FILE.name}`")
+
+if retrain_clicked:
+    data_for_training = load_enriched_data(use_weather_api=True, cache_buster=pd.Timestamp.utcnow().timestamp())
+    if data_for_training.empty:
+        st.error("No data available to train. Upload telemetry first.")
+    else:
+        # Clear persisted models and cached resource to force fresh training
+        for model_path in (CHECKIN_MODEL_FILE, SNACK_MODEL_FILE):
+            try:
+                if model_path.exists():
+                    model_path.unlink()
+            except Exception as exc:  # pragma: no cover - streamlit interaction
+                st.warning(f"Could not remove {model_path.name}: {exc}")
+        try:
+            train_models.clear()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        with st.spinner("Training attendance and snack models..."):
+            try:
+                models = train_models(data_for_training)
+            except Exception as exc:  # pragma: no cover - streamlit interaction
+                st.error(f"Training failed: {exc}")
+                models = (None, None)
+        if models and all(models):
+            st.success("Models retrained and saved. Forecast pages will use the new fit.")
+        else:
+            st.warning("Models were not produced. Check logs and dataset completeness.")
 
 now_utc = pd.Timestamp.now(timezone.utc)
 if data_sample.empty or "timestamp" not in data_sample.columns:

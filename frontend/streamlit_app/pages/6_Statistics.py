@@ -33,8 +33,8 @@ PAGE_ICON = get_logo_path() or "📈"
 st.set_page_config(page_title="Statistics", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("6_Statistics.py")
-st.title("Statistical Rundown")
-st.caption("Understand how weather, gym attendance, and snack demand interact using descriptive and regression analytics.")
+st.title("Analytics & Drivers")
+st.caption("Readable, decision-ready analytics that link weather to gym traffic and snack pull-through.")
 
 with st.sidebar:
     sidebar_info_block()
@@ -58,125 +58,141 @@ if window_df.empty:
 
 metrics_row = window_df.tail(1).iloc[0]
 col_a, col_b, col_c, col_d = st.columns(4)
-col_a.metric("Latest temperature", f"{metrics_row['temperature_c']:.1f}°C")
-col_b.metric("Daily rainfall", f"{window_df['precipitation_mm'].tail(96).sum():.1f} mm")
-col_c.metric("Check-ins (24h)", f"{window_df['checkins'].tail(96).sum():.0f}")
-col_d.metric("Snack units (24h)", f"{window_df['snack_units'].tail(96).sum():.0f}")
+col_a.metric("Latest temperature", f"{metrics_row['temperature_c']:.1f}°C", "Live weather feed")
+col_b.metric("Daily rainfall", f"{window_df['precipitation_mm'].tail(96).sum():.1f} mm", "Past 24h")
+col_c.metric("Check-ins (24h)", f"{window_df['checkins'].tail(96).sum():.0f}", "Footfall")
+col_d.metric("Snack units (24h)", f"{window_df['snack_units'].tail(96).sum():.0f}", "POS volume")
 
-st.subheader("Correlation overview")
-corr_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
-corr_matrix = window_df[corr_cols].corr()
-corr_fig = px.imshow(
-    corr_matrix,
-    text_auto=".2f",
-    aspect="auto",
-    color_continuous_scale=[CORAL, "#FFFFFF", PRIMARY_GREEN],
-    title="Pearson correlation matrix",
-)
-st.plotly_chart(corr_fig, use_container_width=True)
-hover_tip(
-    "Hover for correlation math",
-    "Pearson r = Σ(x - x̄)(y - ȳ) / sqrt[Σ(x - x̄)² Σ(y - ȳ)²], bounded between -1 and 1.",
+overview_tab, drivers_tab, regression_tab, rhythm_tab = st.tabs(
+    ["Overview", "Drivers", "Regression", "Daily rhythm"]
 )
 
-st.subheader("Pairwise relationships")
-pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
-pair_fig = px.scatter_matrix(window_df, dimensions=pair_cols, color="weather_label", title="Scatter matrix with weather classes")
-st.plotly_chart(pair_fig, use_container_width=True)
-hover_tip(
-    "Hover for scatter-matrix math",
-    "Each panel plots raw pairs (x_i, y_i); diagonal histograms show marginals. Trendlines use y = β₀ + β₁x from ordinary least squares.",
-)
+with overview_tab:
+    st.subheader("Correlation snapshot")
+    corr_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
+    corr_matrix = window_df[corr_cols].corr()
+    corr_fig = px.imshow(
+        corr_matrix,
+        text_auto=".2f",
+        aspect="auto",
+        color_continuous_scale=[CORAL, "#FFFFFF", PRIMARY_GREEN],
+        title="How variables move together (Pearson r)",
+    )
+    st.plotly_chart(corr_fig, use_container_width=True)
+    corr_pairs = (
+        corr_matrix.where(~np.eye(len(corr_matrix), dtype=bool))
+        .stack()
+        .reset_index()
+        .rename(columns={"level_0": "A", "level_1": "B", 0: "r"})
+        .sort_values("r", key=lambda s: s.abs(), ascending=False)
+    )
+    top_corr = corr_pairs.head(3)
+    bullets = [
+        f"`{row['A']} ↗ {row['B']}` r = {row['r']:.2f}" for _, row in top_corr.iterrows()
+    ]
+    st.markdown("**Strongest moves in this window:** " + " · ".join(bullets))
+    hover_tip(
+        "How to read this",
+        "r values near +1 mean they rise together; near -1 means they move opposite; near 0 means weak linkage.",
+    )
 
-st.subheader("Weather → attendance → snacks")
-scatter_cols = st.columns(2)
-scatter_cols[0].plotly_chart(
-    px.scatter(
+    st.info(
+        "Use this overview to check if the live feed matches your mental model (e.g., warm and dry days should lift check-ins)."
+    )
+
+with drivers_tab:
+    st.subheader("Pairwise relationships")
+    pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
+    pair_fig = px.scatter_matrix(
         window_df,
-        x="temperature_c",
-        y="checkins",
-        color="is_weekend",
-        labels={"is_weekend": "Weekend?", "temperature_c": "Temperature (°C)", "checkins": "Check-ins"},
-        trendline="ols",
-        title="Temperature vs. gym attendance",
-    ),
-    use_container_width=True,
-)
-hover_tip(
-    "Hover for temperature → check-ins fit",
-    "OLS solves min Σ(y_i - (β₀ + β₁x_i))² with y = check-ins, x = temperature; weekend color shows categorical split.",
-)
-st.markdown("*Linear fit*: the dashed trendline solves")
-st.latex(r"\underset{\beta_0,\beta_1}{\arg\min} \sum_i \left(y_i - (\beta_0 + \beta_1 x_i)\right)^2")
-st.markdown("for y = check-ins and x = temperature, with color encoding the weekend dummy.")
-scatter_cols[1].plotly_chart(
-    px.scatter(
-        window_df,
-        x="precipitation_mm",
-        y="snack_units",
+        dimensions=pair_cols,
         color="weather_label",
-        labels={"precipitation_mm": "Precipitation (mm)", "snack_units": "Snack units"},
-        trendline="ols",
-        title="Precipitation vs. snack demand",
-    ),
-    use_container_width=True,
-)
-hover_tip(
-    "Hover for precipitation → snacks fit",
-    "Same least-squares regression with y = snack units and x = precipitation; color adds weather label context.",
-)
+        title="Raw pairs with weather classes",
+    )
+    st.plotly_chart(pair_fig, use_container_width=True)
+    hover_tip(
+        "What to look for",
+        "Diagonal panels show distribution; off-diagonals show how clouds of points lean up or down.",
+    )
 
-st.subheader("Regression diagnostics")
-reg_df = window_df[["checkins", "snack_units", "temperature_c", "precipitation_mm", "is_weekend"]].copy()
-reg_df["is_weekend"] = reg_df["is_weekend"].astype(float)
+    st.subheader("Weather → attendance → snacks")
+    scatter_cols = st.columns(2)
+    scatter_cols[0].plotly_chart(
+        px.scatter(
+            window_df,
+            x="temperature_c",
+            y="checkins",
+            color="is_weekend",
+            labels={"is_weekend": "Weekend?", "temperature_c": "Temperature (°C)", "checkins": "Check-ins"},
+            trendline="ols",
+            title="Temperature vs. gym attendance",
+        ),
+        use_container_width=True,
+    )
+    scatter_cols[1].plotly_chart(
+        px.scatter(
+            window_df,
+            x="precipitation_mm",
+            y="snack_units",
+            color="weather_label",
+            labels={"precipitation_mm": "Precipitation (mm)", "snack_units": "Snack units"},
+            trendline="ols",
+            title="Precipitation vs. snack demand",
+        ),
+        use_container_width=True,
+    )
+    st.markdown(
+        "- Warmer days tilt the attendance cloud upward; weekend points sit higher.\n"
+        "- Rain pulls snack units down unless classified as a light shower."
+    )
 
-X = sm.add_constant(reg_df[["temperature_c", "precipitation_mm", "is_weekend"]])
-checkins_model = sm.OLS(reg_df["checkins"], X).fit()
-snacks_model = sm.OLS(reg_df["snack_units"], X).fit()
+with regression_tab:
+    st.subheader("Quick regression readout")
+    reg_df = window_df[["checkins", "snack_units", "temperature_c", "precipitation_mm", "is_weekend"]].copy()
+    reg_df["is_weekend"] = reg_df["is_weekend"].astype(float)
 
-coef_table = pd.DataFrame(
-    {
-        "Predictor": X.columns,
-        "Check-ins β": checkins_model.params,
-        "Check-ins p": checkins_model.pvalues,
-        "Snack β": snacks_model.params,
-        "Snack p": snacks_model.pvalues,
-    }
-).round(3)
-st.dataframe(coef_table, use_container_width=True)
+    X = sm.add_constant(reg_df[["temperature_c", "precipitation_mm", "is_weekend"]])
+    checkins_model = sm.OLS(reg_df["checkins"], X).fit()
+    snacks_model = sm.OLS(reg_df["snack_units"], X).fit()
 
-hover_tip(
-    "Hover for regression math",
-    "Model: y = β₀ + β₁·temperature + β₂·precip + β₃·weekend + ε. Coefficients show marginal effect; p-values test H₀: β=0.",
-)
+    coef_table = pd.DataFrame(
+        {
+            "Predictor": X.columns,
+            "Check-ins β": checkins_model.params,
+            "Check-ins p": checkins_model.pvalues,
+            "Snack β": snacks_model.params,
+            "Snack p": snacks_model.pvalues,
+        }
+    ).round(3)
+    st.dataframe(coef_table, use_container_width=True)
 
-st.subheader("Daily decomposition")
-daily = (
-    window_df.set_index("timestamp")
-    .resample("D")
-    .agg({"temperature_c": "mean", "precipitation_mm": "sum", "checkins": "sum", "snack_units": "sum"})
-    .reset_index()
-)
-daily_fig = px.line(
-    daily,
-    x="timestamp",
-    y=["temperature_c", "checkins", "snack_units"],
-    labels={"value": "Value", "variable": "Series"},
-    title="Daily weather & demand trend",
-)
-st.plotly_chart(daily_fig, use_container_width=True)
-hover_tip(
-    "Hover for daily aggregation math",
-    "Temp line averages all hours in a day (mean over H_d). Precip, check-ins, and snack units sum over the same hourly set.",
-)
+    st.markdown(
+        "- `β` columns show how much the outcome changes per unit of the predictor (holding the others steady).\n"
+        "- `p` values < 0.05 suggest the signal is unlikely to be noise.\n"
+        "- Temperature usually lifts both attendance and snacks; precipitation often works the opposite way."
+    )
 
-st.info(
-    "Use this page to validate demand hypotheses before configuring scenarios and automation on the other tabs."
-)
+with rhythm_tab:
+    st.subheader("Daily rhythm")
+    daily = (
+        window_df.set_index("timestamp")
+        .resample("D")
+        .agg({"temperature_c": "mean", "precipitation_mm": "sum", "checkins": "sum", "snack_units": "sum"})
+        .reset_index()
+    )
+    daily_fig = px.line(
+        daily,
+        x="timestamp",
+        y=["temperature_c", "checkins", "snack_units"],
+        labels={"value": "Value", "variable": "Series"},
+        title="Daily trend of weather, traffic, and snacks",
+    )
+    st.plotly_chart(daily_fig, use_container_width=True)
+    st.markdown(
+        "Blend this with staffing and procurement plans: match crew and replenishment to the next upturn."
+    )
 
-st.markdown(
-    """
-**Takeaways** – Warmer, dry days consistently lift check-ins and snack units, while rain erodes demand unless weekend events offset the dip. The regression fits quantify that every extra °C yields a tangible uptick in attendance and snack pull-through, whereas millimeters of precipitation have the opposite effect. When those weather-sensitive forecasts are rolled into the merchandising mix, we can bias procurement toward protein and matcha on hot stretches and pivot to isotonic or smoothie-heavy assortments when storms approach—all while letting the auto restock guardrails ensure shelves stay ahead of the next temperature-driven spike.
-"""
+st.success(
+    "Analytics now speak plainly: start at Overview to see if live correlations look right, jump to Drivers to see the shape of the data, then use Regression to quantify impact before you run what-if tests or automation."
 )
 render_footer()
