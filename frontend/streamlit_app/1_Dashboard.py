@@ -719,31 +719,38 @@ def render_dashboard() -> None:
                 use_container_width=True,
                 height=280,
             )
-        product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
-        if not product_forecast.empty:
+    product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
+    if not product_forecast.empty:
         st.caption("Next 3 days · snack demand split by merchandise plan")
         hover_tip(
             "ℹ️ Mix allocation",
-            "Each day's total snack forecast is split by the mix weights: units_for_item = weight × total predicted snacks.",
+            "Each day's total snack forecast is split by the mix weights: "
+            "units_for_item = weight × total predicted snacks.",
         )
-            upcoming_dates = sorted(product_forecast["date"].unique())[:3]
-            product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
-            product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
-            st.dataframe(
-                product_window[
-                    ["date", "product", "forecast_units", "suggested_qty", "weight"]
-                ].rename(
-                    columns={
-                        "date": "Date",
-                        "product": "Product",
-                        "forecast_units": "Forecast units",
-                        "suggested_qty": "Plan units",
-                        "weight": "Mix weight",
-                    }
-                ).style.format({"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}"}),
-                use_container_width=True,
-                height=280,
-            )
+        upcoming_dates = sorted(product_forecast["date"].unique())[:3]
+        product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
+        product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
+        st.dataframe(
+            product_window[
+                ["date", "product", "forecast_units", "suggested_qty", "weight"]
+            ].rename(
+                columns={
+                    "date": "Date",
+                    "product": "Product",
+                    "forecast_units": "Forecast units",
+                    "suggested_qty": "Plan units",
+                    "weight": "Mix weight",
+                }
+            ).style.format(
+                {
+                    "Forecast units": "{:.0f}",
+                    "Plan units": "{:.0f}",
+                    "Mix weight": "{:.2f}",
+                }
+            ),
+            use_container_width=True,
+            height=280,
+        )
     render_pricing_hints(data)
     st.subheader("What-if forecast")
     hover_tip(
