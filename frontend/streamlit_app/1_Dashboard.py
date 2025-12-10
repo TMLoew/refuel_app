@@ -221,40 +221,6 @@ def render_product_mix_outlook(product_mix_df: pd.DataFrame) -> None:
     )
 
 
-def render_pricing_hints(data: pd.DataFrame) -> None:
-    # Simple weekday averages to hint at price adjustments.
-    st.subheader("Day-of-week pricing hints")
-    if not {"weekday", "snack_units", "snack_price", "checkins"}.issubset(set(data.columns)):
-        st.info("Pricing hints unavailable because required columns are missing.")
-        return
-
-    dow_stats = (
-        data.groupby("weekday")
-        .agg(checkins=("checkins", "mean"), snack_units=("snack_units", "mean"), price=("snack_price", "mean"))
-        .reset_index()
-    )
-    dow_stats["weekday_name"] = dow_stats["weekday"].map(dict(enumerate(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])))
-    dow_stats["suggested_price"] = (
-        dow_stats["price"]
-        * (dow_stats["snack_units"] / dow_stats["snack_units"].mean()).clip(lower=0.8, upper=1.2)
-    )
-
-    dow_fig = px.bar(
-        dow_stats,
-        x="weekday_name",
-        y=["snack_units", "checkins"],
-        barmode="group",
-        title="Average demand by weekday",
-        labels={"value": "Average per hour", "variable": ""},
-    )
-    st.plotly_chart(dow_fig, use_container_width=True)
-    st.table(
-        dow_stats[["weekday_name", "snack_units", "suggested_price"]]
-        .rename(columns={"weekday_name": "Weekday", "snack_units": "Avg snack units", "suggested_price": "Suggested price (CHF)"})
-        .style.format({"Avg snack units": "{:.1f}", "Suggested price (CHF)": "CHF{:.2f}"})
-    )
-
-
 def render_summary_cards(df: pd.DataFrame) -> None:
     # Recent KPIs from the last 24 hours plus the single peak hour.
     recent = df.tail(24)
@@ -759,9 +725,6 @@ def render_dashboard() -> None:
             use_container_width=True,
             height=280,
         )
-    render_pricing_hints(data)
-
-
 def _safe_render() -> None:
     try:
         render_dashboard()
