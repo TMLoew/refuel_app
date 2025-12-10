@@ -760,12 +760,6 @@ def render_dashboard() -> None:
             height=280,
         )
     render_pricing_hints(data)
-    st.subheader("What-if forecast")
-    hover_tip(
-        "ℹ️ Forecast math",
-        "Predictions come from two simple linear models for check-ins and snacks. Sliders change the inputs before predicting.",
-    )
-    render_forecast_section(data, forecast_df)
 
 
 def _safe_render() -> None:

@@ -40,6 +40,7 @@ The app reads and writes local CSV/JSON files only, so it works offline. Live we
 | `data/pos_log.csv` | Logged sales/restocks with optional per-product breakdown. |
 | `data/restock_policy.json` | Auto-restock settings (thresholds and cooldown). |
 | `data/autopilot_infinite.csv` and `data/procurement_plan.csv` | Outputs from the simple procurement simulation. |
+| `rainy_day` column | Flag set to 1 when daily precipitation is at least 2mm (used to bias the product mix toward warm drinks). |
 
 Everything is human-readable. If a file is missing, most pages will show an error message you can fix by adding the file.
 
