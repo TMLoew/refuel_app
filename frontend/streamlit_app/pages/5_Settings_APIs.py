@@ -28,6 +28,7 @@ try:
     from frontend.streamlit_app.services.data_utils import (
         load_enriched_data,
         load_pos_log,
+        load_product_mix_data,
         load_weather_profile,
         save_weather_profile,
         build_scenario_forecast,
@@ -36,7 +37,7 @@ try:
         WEATHER_SCENARIOS,
     )
 except ImportError:
-    from frontend.streamlit_app.services.data_utils import load_enriched_data, load_pos_log  # type: ignore
+    from frontend.streamlit_app.services.data_utils import load_enriched_data, load_pos_log, load_product_mix_data  # type: ignore
 
     def load_weather_profile() -> dict:  # type: ignore[misc]
         return {"lat": 47.4239, "lon": 9.3748, "api_timeout": 10, "cache_hours": 6}
@@ -470,6 +471,39 @@ active_env = "Default"
 
 with st.sidebar:
     sidebar_info_block()
+
+# Data freshness indicators for key files.
+telemetry_df = load_enriched_data(use_weather_api=False)
+mix_df = load_product_mix_data()
+pos_df = load_pos_log()
+now_utc = pd.Timestamp.now(timezone.utc)
+
+def _age_status(ts: Optional[pd.Timestamp], warn_hours: float = 24.0) -> tuple[str, str]:
+    if ts is None:
+        return ("❌ Missing", "no data")
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    hours = max(0, (now_utc - ts).total_seconds() / 3600)
+    label = f"{hours:.0f}h old" if hours >= 1 else f"{hours*60:.0f}m old"
+    status = "✅ Fresh" if hours <= warn_hours else "⚠️ Stale"
+    return status, label
+
+telemetry_ts = telemetry_df["timestamp"].max() if not telemetry_df.empty and "timestamp" in telemetry_df else None
+mix_ts = mix_df["date"].max() if not mix_df.empty and "date" in mix_df else None
+pos_ts = pos_df["timestamp"].max() if not pos_df.empty and "timestamp" in pos_df else None
+wx_cache = ROOT_DIR / "data" / "weather_cache.csv"
+wx_ts = pd.to_datetime(wx_cache.stat().st_mtime, unit="s", utc=True) if wx_cache.exists() else None
+
+st.subheader("Data freshness")
+st.caption("Refresh files if you see stale or missing status; forecasts rely on these inputs.")
+d_cols = st.columns(4)
+for col, name, ts in zip(
+    d_cols,
+    ["Telemetry", "Product mix", "POS log", "Weather cache"],
+    [telemetry_ts, mix_ts, pos_ts, wx_ts],
+):
+    status, age = _age_status(pd.to_datetime(ts) if ts is not None else None, warn_hours=24)
+    col.metric(name, status, age)
 
 # Weather profile form saves lat/lon and cache settings.
 st.subheader("Weather API configuration")
