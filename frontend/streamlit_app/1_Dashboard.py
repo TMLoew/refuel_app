@@ -658,28 +658,32 @@ def render_dashboard() -> None:
             "ℹ️ Aggregation math",
             "Daily table sums hourly check-ins/snacks and compares them with forecasted sums. Forecast rows come from the same linear regressors but aggregated by date.",
         )
-        merged_daily = daily_actuals.merge(
-            daily_forecast,
-            on="date",
-            how="outer",
-            suffixes=("_actual", "_forecast"),
-        ).sort_values("date")
-        if not merged_daily.empty:
-            window_mask = merged_daily["date"] >= (merged_daily["date"].max() - pd.Timedelta(days=10))
-            merged_window = merged_daily[window_mask].copy()
-            merged_window["date"] = merged_window["date"].dt.strftime("%Y-%m-%d")
-            display_cols = [
-                "date",
-                "actual_checkins",
-                "pred_checkins",
-                "actual_snack_units",
-                "pred_snack_units",
-                "actual_snack_revenue",
-                "pred_snack_revenue",
-            ]
-            present_cols = [col for col in display_cols if col in merged_window.columns]
+        # Build a combined table: last 3 actual days + upcoming forecast days, so columns aren't blank.
+        actual_slice = daily_actuals.copy()
+        if not actual_slice.empty:
+            actual_slice = actual_slice.sort_values("date").tail(3)
+            for col in ["pred_checkins", "pred_snack_units", "pred_snack_revenue"]:
+                actual_slice[col] = None
+        forecast_slice = daily_forecast.copy()
+        if not forecast_slice.empty:
+            for col in ["actual_checkins", "actual_snack_units", "actual_snack_revenue"]:
+                forecast_slice[col] = None
+        combined = pd.concat([actual_slice, forecast_slice], ignore_index=True)
+        if not combined.empty:
+            combined = combined.sort_values("date")
+            combined["date"] = pd.to_datetime(combined["date"]).dt.strftime("%Y-%m-%d")
             st.dataframe(
-                merged_window[present_cols].rename(
+                combined[
+                    [
+                        "date",
+                        "actual_checkins",
+                        "pred_checkins",
+                        "actual_snack_units",
+                        "pred_snack_units",
+                        "actual_snack_revenue",
+                        "pred_snack_revenue",
+                    ]
+                ].rename(
                     columns={
                         "date": "Date",
                         "actual_checkins": "Actual check-ins",
