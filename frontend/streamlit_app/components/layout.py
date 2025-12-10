@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
+import html
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable, List, Optional
-import html
+from typing import Iterable, List, NamedTuple, Optional
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -112,11 +111,10 @@ def _apply_plotly_theme() -> None:
 _apply_plotly_theme()
 
 
-@dataclass(frozen=True)
-class NavItem:
-    label: str
-    emoji: str
-    path: str
+class NavItem(NamedTuple):
+    label: str  # visible text
+    emoji: str  # icon shown in the nav
+    path: str   # target page filename
 
 
 DEFAULT_NAV: List[NavItem] = [
