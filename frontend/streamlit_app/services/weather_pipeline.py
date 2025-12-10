@@ -109,6 +109,7 @@ def _request_hourly_weather(
         "&hourly=temperature_2m,relative_humidity_2m,precipitation"
         f"&timezone={timezone}"
     )
+    # Track latency so dashboards can display telemetry about the call.
     start = time.perf_counter()
     resp = requests.get(url, timeout=10)
     latency_ms = (time.perf_counter() - start) * 1000
@@ -130,6 +131,7 @@ def fetch_hourly_weather_frame(
 
     start_dt = min(timestamps).date()
     end_dt = max(timestamps).date()
+    # Fetch two-week chunks to stay within Open-Meteo's query limits.
     chunk_days = 14
     frames: List[pd.DataFrame] = []
     total_latency = 0.0
@@ -209,6 +211,7 @@ def fetch_future_weather_forecast(
             "precipitation_mm": hourly.get("precipitation"),
         }
     )
+    # Even if the API returns extra hours, only keep the requested horizon.
     mask = (frame["timestamp"] >= start_ts) & (frame["timestamp"] <= end_ts)
     return frame.loc[mask].reset_index(drop=True)
 
@@ -240,6 +243,7 @@ class DataPipeline:
         return seasonality.get(self.ingredient.name, {}).get(season, (1.0, 1.0))
 
     def run(self) -> None:
+        # Precompute visitor counts per date so lookups stay O(1).
         gym_by_date = {row["date"]: row["visitors"] for row in self.gym_rows}
         merged: List[dict] = []
         for row in self.sales_rows:
@@ -297,6 +301,7 @@ def build_synthetic_weather_frame(timestamps: Sequence[pd.Timestamp]) -> pd.Data
     day_of_year = ts_series.dt.dayofyear
     hour = ts_series.dt.hour
     rng = np.random.default_rng(42)
+    # Blend annual + daily sine waves so synthetic temps feel realistic.
     seasonal_temp = 16 + 6 * np.sin(2 * np.pi * day_of_year / 365) + 4 * np.sin(2 * np.pi * hour / 24)
     temperature_c = seasonal_temp + rng.normal(0, 1.8, len(ts_series))
     precipitation_mm = np.clip(

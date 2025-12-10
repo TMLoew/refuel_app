@@ -23,9 +23,9 @@ def fetch_weather_hourly(start_utc: datetime, end_utc: datetime) -> pd.DataFrame
     hourly = r.json()["hourly"]
     df = pd.DataFrame(hourly).rename(columns={"time": "ts_utc"})
     df["ts_utc"] = pd.to_datetime(df["ts_utc"], utc=True)
-    # keep only requested hours
+    # API responses can overrun; tighten to the exact requested window.
     df = df[(df["ts_utc"] >= start_utc) & (df["ts_utc"] <= end_utc)]
-    # convenience: local time
+    # Add Zurich-local timestamps to simplify downstream joins.
     df["ts_local"] = df["ts_utc"].dt.tz_convert("Europe/Zurich")
     df["date_local"] = df["ts_local"].dt.date
     df["hour_local"] = df["ts_local"].dt.hour
@@ -46,6 +46,7 @@ def fetch_full_range(start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
     frames = []
     cursor = start_utc
     while cursor <= end_utc:
+        # Request up to seven days at a time to respect the API's window limit.
         chunk_end = min(cursor + timedelta(days=6, hours=23), end_utc)
         frames.append(fetch_weather_hourly(cursor, chunk_end))
         cursor = chunk_end + timedelta(hours=1)
@@ -63,6 +64,7 @@ def sync_weather_to_gym_csv(
     if not p.exists():
         raise FileNotFoundError(f"Gym CSV missing: {gym_csv_path}")
     first_cols = pd.read_csv(p, nrows=1).columns
+    # Support both timezone-aware and naive timestamp columns exported from the gym system.
     ts_col = "ts_local" if "ts_local" in first_cols else "ts_local_naive"
     df = pd.read_csv(p, parse_dates=[ts_col])
     series = pd.to_datetime(df[ts_col])

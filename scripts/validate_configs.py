@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
+# Anchor the script to repo root so relative paths work when invoked anywhere.
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 
@@ -23,6 +24,7 @@ def validate_product_prices() -> list[str]:
     if not price_file.exists():
         issues.append("Missing product_prices.csv. Open the Price Manager page to initialize it.")
         return issues
+    # Only basic schema/NA checks are needed for this quick validation.
     df = pd.read_csv(price_file)
     required_cols = {"product", "unit_price"}
     if not required_cols.issubset(df.columns):
@@ -55,6 +57,7 @@ def validate_mix_recency() -> list[str]:
     if not mix_file.exists():
         issues.append("Missing product_mix_daily.csv.")
         return issues
+    # Parse the date column so freshness comparisons stay robust.
     df = pd.read_csv(mix_file, parse_dates=["date"])
     if df.empty:
         issues.append("`product_mix_daily.csv` has no rows.")
@@ -67,6 +70,7 @@ def validate_mix_recency() -> list[str]:
 
 
 def main() -> None:
+    # Group each validation with a label so the output stays readable.
     checks = [
         ("Product prices", validate_product_prices),
         ("Restock policy", validate_restock_policy),

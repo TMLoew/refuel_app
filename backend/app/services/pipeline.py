@@ -113,6 +113,7 @@ def load_gym_daily(csv_path: str) -> pd.DataFrame:
         raise FileNotFoundError(f"Gym CSV not found: {csv_path}")
 
     df = pd.read_csv(p)
+    # Accept either the modern ts_local column or the legacy ts_local_naive field.
     ts_col = "ts_local" if "ts_local" in df.columns else ("ts_local_naive" if "ts_local_naive" in df.columns else None)
     if not ts_col:
         raise ValueError("Expected 'ts_local' or 'ts_local_naive' column in gym CSV")
@@ -131,6 +132,7 @@ def load_gym_daily(csv_path: str) -> pd.DataFrame:
         cardio["cardio_share"] = (cardio["treadmill_sessions"] / cardio["checkins"].clip(lower=1)).clip(0,1)
         cardio = cardio[["date","cardio_share"]]
     else:
+        # Default to a neutral 50/50 cardio/strength split when treadmill data is missing.
         cardio = pd.DataFrame({"date": visitors["date"], "cardio_share": 0.5})
 
     return visitors.merge(cardio, on="date", how="left")
@@ -147,8 +149,10 @@ def build_product_mix(
 
     start_date, end_date = min(gym["date"]), max(gym["date"])
     if weather_hourly_csv and Path(weather_hourly_csv).exists():
+        # Prefer the cached hourly weather file to avoid unnecessary API calls.
         wx_raw = pd.read_csv(weather_hourly_csv, parse_dates=["ts_local"])
         if wx_raw["ts_local"].dt.tz is None:
+            # Normalize timezone handling so resampling operates on naive timestamps in Zurich time.
             wx_raw["ts_local"] = pd.to_datetime(wx_raw["ts_local"]).dt.tz_localize("Europe/Zurich")
         wx = (
             wx_raw.assign(ts_local=wx_raw["ts_local"].dt.tz_convert("Europe/Zurich").dt.tz_localize(None))
@@ -168,7 +172,9 @@ def build_product_mix(
 
     rows: List[dict] = []
     for _, r in df.iterrows():
+        # Weather and cardio share feed into the rule-based mix allocation.
         mix = recommend_mix(float(r["temp_max_c"]), float(r["precip_mm"]), cardio_share=float(r["cardio_share"]))
+        # Base conversion turns visitor counts into expected drink orders.
         total_drinks = int(round(r["visitors"] * base_conversion))
         for product, weight in mix.items():
             rows.append({

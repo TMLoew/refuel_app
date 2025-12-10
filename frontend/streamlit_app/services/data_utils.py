@@ -46,6 +46,7 @@ from .weather_pipeline import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+# Choose the first gym dataset that exists locally so widgets stay populated.
 PREFERRED_DATASETS = [
     PROJECT_ROOT / "data" / "gym_badges_0630_2200_long.csv",
     PROJECT_ROOT / "data" / "gym_badges.csv",
@@ -83,12 +84,14 @@ WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
 
 
 def _safe_precip_multiplier(numerator: float, denominator: float, floor: float = 0.05) -> float:
+    # Guard against divide-by-zero while enforcing a reasonable floor.
     denominator = max(denominator, 0.05)
     multiplier = numerator / denominator if denominator else 1.0
     return max(floor, multiplier)
 
 
 def _normalize_to_utc_naive(ts: Any) -> pd.Timestamp:
+    # Convert anything the UI hands us into naive UTC timestamps.
     stamp = pd.to_datetime(ts)
     if stamp.tzinfo is not None:
         stamp = stamp.tz_convert("UTC").tz_localize(None)
@@ -108,6 +111,7 @@ def _load_cached_weather_window(start_ts: pd.Timestamp, end_ts: pd.Timestamp) ->
     if getattr(timestamps.dt, "tz", None) is not None:
         timestamps = timestamps.dt.tz_convert("UTC").dt.tz_localize(None)
     cache_df["timestamp"] = timestamps
+    # Slice cache to just the requested window; ignore older entries.
     mask = (cache_df["timestamp"] >= start_ts) & (cache_df["timestamp"] <= end_ts)
     subset = cache_df.loc[mask].copy()
     if subset.empty:
@@ -145,6 +149,7 @@ def _save_weather_cache(frame: pd.DataFrame) -> None:
             .drop_duplicates(subset="timestamp")
             .sort_values("timestamp")
         )
+        # Drop stale weather beyond ~60 days to keep the cache light.
         cutoff = combined["timestamp"].max() - pd.Timedelta(days=60)
         combined = combined[combined["timestamp"] >= cutoff]
     else:
@@ -164,6 +169,7 @@ def derive_weather_archetypes(history: pd.DataFrame) -> Dict[str, Dict[str, floa
     if not required.issubset(history.columns):
         return {}
 
+    # Work off medians/quantiles so outliers don't skew the archetypes.
     temp = history["temperature_c"].dropna()
     precip = history["precipitation_mm"].dropna()
     humidity = history["humidity_pct"].dropna()
@@ -237,6 +243,7 @@ def build_enriched_history(
     if df.empty:
         return df
 
+    # Support older CSV exports by checking multiple timestamp column names.
     timestamp_candidates = ["ts_local_naive", "ts_local", "timestamp"]
     timestamp_col = next((col for col in timestamp_candidates if col in df.columns), None)
     if timestamp_col is None:
@@ -277,13 +284,16 @@ def build_enriched_history(
                 weather_source = "cached"
 
     if weather_frame.empty:
+        # Final fallback keeps the pipeline running during outages.
         weather_frame = build_synthetic_weather_frame(timestamps)
 
     df = df.merge(weather_frame, on="timestamp", how="left")
     weather_cols = ["temperature_c", "precipitation_mm", "humidity_pct"]
+    # Fill gaps so downstream modeling never sees NaNs.
     df[weather_cols] = df[weather_cols].ffill().bfill()
     df.attrs["weather_source"] = weather_source
 
+    # Rudimentary event intensity heuristic to mimic peak/quiet periods.
     df["event_intensity"] = np.where(
         (df["weekday"].isin([1, 3]) & df["hour"].between(17, 20)),
         1.6,
@@ -300,6 +310,7 @@ def build_enriched_history(
     base_prices = np.array(
         [banana.seasonal_price(season, price_idx) for season, price_idx in zip(df["season"], df["price_index"])]
     )
+    # Inject a little price noise per hour to avoid perfectly flat signals.
     df["snack_price"] = np.clip(base_prices + rng.normal(0, 0.05, len(df)), 2.0, 4.5)
     df["snack_units"] = np.clip(
         0.42 * df["checkins"]
@@ -323,6 +334,7 @@ def build_enriched_history(
         labels=["Freezing", "Cool", "Mild", "Warm"],
     )
     df = add_time_signals(df)
+    # Attach metadata so the UI can describe the provenance of weather data.
     df.attrs["weather_meta"] = {
         "source": weather_source,
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="minutes"),
@@ -375,6 +387,7 @@ def build_scenario_forecast(
     if checkin_model is None or snack_model is None:
         return pd.DataFrame()
 
+    # Scenario defines how many future hours to generate.
     horizon = scenario["horizon_hours"]
     use_live_future = bool(scenario.get("use_live_weather", False))
     anchor_ts = history["timestamp"].max()
@@ -387,6 +400,7 @@ def build_scenario_forecast(
     future["is_weekend"] = future["weekday"].isin([5, 6]).astype(int)
     future["day_of_year"] = future["timestamp"].dt.dayofyear
 
+    # Median hourly profile offers a baseline before weather perturbations.
     hourly_profile = (
         history.groupby(["weekday", "hour"])[
             ["temperature_c", "precipitation_mm", "humidity_pct", "event_intensity", "snack_price"]
@@ -435,6 +449,7 @@ def build_scenario_forecast(
     )
 
     future_features = add_time_signals(future)
+    # Apply marketing boost after predicting attendance and keep values >=0.
     future["pred_checkins"] = np.clip(
         checkin_model.predict(future_features[CHECKIN_FEATURES])
         * (1 + scenario["marketing_boost_pct"] / 100),
@@ -443,6 +458,7 @@ def build_scenario_forecast(
     )
 
     future_features["checkins"] = future["pred_checkins"]
+    # Feed predicted checkins into the snack model for consistency.
     future["pred_snack_units"] = np.clip(
         snack_model.predict(future_features[SNACK_FEATURES]),
         0,
@@ -491,6 +507,7 @@ def load_product_mix_data(csv_path: Path = PRODUCT_MIX_FILE) -> pd.DataFrame:
 
 
 def _default_price_frame() -> pd.DataFrame:
+    # Derive the product universe from the mix file whenever possible.
     mix_df = load_product_mix_data()
     products = sorted(mix_df["product"].dropna().unique().tolist()) if not mix_df.empty else []
     if not products:
@@ -504,6 +521,7 @@ def load_product_prices() -> pd.DataFrame:
         df = pd.read_csv(PRODUCT_PRICE_FILE)
     else:
         df = pd.DataFrame()
+    # Rebuild from defaults whenever the CSV is missing or malformed.
     if df.empty or "product" not in df.columns or "unit_price" not in df.columns:
         df = _default_price_frame()
         if not df.empty:
@@ -520,6 +538,7 @@ def save_product_prices(prices: pd.DataFrame) -> None:
         return
     export = prices.copy()
     export = export[["product", "unit_price"]].copy()
+    # Coerce inputs to floats and fall back to default pricing when blank.
     export["unit_price"] = pd.to_numeric(export["unit_price"], errors="coerce").fillna(DEFAULT_PRODUCT_PRICE)
     PRODUCT_PRICE_FILE.parent.mkdir(parents=True, exist_ok=True)
     export.to_csv(PRODUCT_PRICE_FILE, index=False)
@@ -544,6 +563,7 @@ def add_or_update_product_price(product: str, unit_price: float = DEFAULT_PRODUC
             prices.loc[prices["product"] == product, "unit_price"] = unit_price
             updated = prices
         else:
+            # Append new products so the POS can reference them immediately.
             new_row = pd.DataFrame({"product": [product], "unit_price": [unit_price]})
             updated = pd.concat([prices, new_row], ignore_index=True)
     save_product_prices(updated)
@@ -565,6 +585,7 @@ def load_weather_profile() -> Dict[str, Any]:
             return {**DEFAULT_WEATHER_PROFILE, **data}
         except Exception:
             return DEFAULT_WEATHER_PROFILE.copy()
+    # First run: create the profile file with baked-in defaults.
     WEATHER_PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
     WEATHER_PROFILE_FILE.write_text(json.dumps(DEFAULT_WEATHER_PROFILE, indent=2))
     return DEFAULT_WEATHER_PROFILE.copy()
@@ -726,6 +747,7 @@ def append_pos_log(entry: Dict[str, Any]) -> None:
     record = entry.copy()
     breakdown = record.get("product_breakdown")
     if isinstance(breakdown, dict):
+        # Sanitize the nested POS breakdown before writing to CSV.
         normalized = {str(k): int(v) for k, v in breakdown.items() if v and int(v) > 0}
         record["product_breakdown"] = json.dumps(normalized)
         if normalized:
@@ -783,6 +805,7 @@ def should_auto_restock(current_stock: float, policy: Dict[str, Any]) -> bool:
     threshold = policy.get("threshold_units", DEFAULT_RESTOCK_POLICY["threshold_units"])
     if current_stock >= threshold:
         return False
+    # Respect the cooldown window before allowing another auto-restock.
     cooldown_hours = policy.get("cooldown_hours", DEFAULT_RESTOCK_POLICY["cooldown_hours"])
     last_event = policy.get("last_auto_restock")
     if last_event:
@@ -808,6 +831,7 @@ def mark_auto_restock(policy: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _safe_load_breakdown(value: Any) -> Dict[str, float]:
+    # Accept dicts/JSON strings and normalize everything else to {}.
     if value is None:
         return {}
     if isinstance(value, float) and math.isnan(value):

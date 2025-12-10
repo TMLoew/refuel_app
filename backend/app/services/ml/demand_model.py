@@ -11,6 +11,7 @@ from joblib import dump, load
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.pipeline import Pipeline
 
+# Absolute paths keep artifacts in a predictable location.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 MODEL_DIR = PROJECT_ROOT / "model"
 CHECKIN_MODEL_FILE = MODEL_DIR / "checkins_hgb.joblib"
@@ -33,7 +34,7 @@ SNACK_FEATURES = CHECKIN_FEATURES + ["checkins"]
 
 
 def add_time_signals(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Attach cyclical encodings used by the regressors."""
+    # Sine/cosine pairs encode cyclical time features without discontinuities.
     enriched = dataframe.copy()
     enriched["sin_hour"] = np.sin(2 * np.pi * enriched["hour"] / 24)
     enriched["cos_hour"] = np.cos(2 * np.pi * enriched["hour"] / 24)
@@ -43,6 +44,7 @@ def add_time_signals(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 
 def _train_checkin_model(feature_df: pd.DataFrame) -> Pipeline:
+    # Separate helper makes the attendance pipeline easier to tweak.
     model = Pipeline(
         [
             (
@@ -62,6 +64,7 @@ def _train_checkin_model(feature_df: pd.DataFrame) -> Pipeline:
 
 
 def _train_snack_model(feature_df: pd.DataFrame) -> Pipeline:
+    # Snack pipeline mirrors the check-in version but includes checkins as input.
     model = Pipeline(
         [
             (
@@ -81,7 +84,7 @@ def _train_snack_model(feature_df: pd.DataFrame) -> Pipeline:
 
 
 def train_models(dataframe: pd.DataFrame) -> Tuple[Pipeline, Pipeline]:
-    """Train attendance + snack regressors given feature-complete history."""
+    # Guard against missing columns before fitting either pipeline.
     if dataframe.empty:
         raise ValueError("Cannot train models on an empty dataframe.")
     required_cols = set(SNACK_FEATURES + ["checkins", "snack_units"])
@@ -94,12 +97,13 @@ def train_models(dataframe: pd.DataFrame) -> Tuple[Pipeline, Pipeline]:
 
 
 def ensure_model_dir(model_dir: Path = MODEL_DIR) -> Path:
+    # Centralized directory creation for all model artifacts.
     model_dir.mkdir(parents=True, exist_ok=True)
     return model_dir
 
 
 def save_models(models: Tuple[Pipeline, Pipeline], model_dir: Path = MODEL_DIR) -> Tuple[Path, Path]:
-    """Persist trained models to disk for reuse."""
+    # Persist both pipelines so later requests can reuse them.
     ensure_model_dir(model_dir)
     checkin_model, snack_model = models
     dump(checkin_model, model_dir / CHECKIN_MODEL_FILE.name)
@@ -108,7 +112,7 @@ def save_models(models: Tuple[Pipeline, Pipeline], model_dir: Path = MODEL_DIR) 
 
 
 def load_models(model_dir: Path = MODEL_DIR) -> Tuple[Optional[Pipeline], Optional[Pipeline]]:
-    """Load persisted models if they exist; returns (None, None) otherwise."""
+    # Return (None, None) whenever either artifact is absent or broken.
     checkin_path = model_dir / CHECKIN_MODEL_FILE.name
     snack_path = model_dir / SNACK_MODEL_FILE.name
     if not checkin_path.exists() or not snack_path.exists():
@@ -120,6 +124,7 @@ def load_models(model_dir: Path = MODEL_DIR) -> Tuple[Optional[Pipeline], Option
 
 
 def models_available(model_dir: Path = MODEL_DIR) -> bool:
+    # Convenience flag the API can check before attempting to serve predictions.
     checkin_path = model_dir / CHECKIN_MODEL_FILE.name
     snack_path = model_dir / SNACK_MODEL_FILE.name
     return checkin_path.exists() and snack_path.exists()

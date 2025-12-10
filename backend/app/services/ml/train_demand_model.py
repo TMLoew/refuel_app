@@ -1,61 +1,58 @@
-"""Offline training entrypoint for the attendance + snack demand models."""
-
-from __future__ import annotations
-
-import argparse
-import sys
+# backend/app/services/ml/train_demand_model.py
 from pathlib import Path
-from typing import Tuple
+import joblib
+import pandas as pd
+from sklearn.linear_model import Ridge
 
-from .demand_model import MODEL_DIR, add_time_signals, save_models, train_models
+from backend.app.services.features import load_product_mix, load_trends, attach_trends
 
-ROOT = Path(__file__).resolve().parents[3]
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
+MODEL_DIR = Path("models")
 
-from frontend.streamlit_app.services.data_utils import build_enriched_history  # noqa: E402
-
-
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train and persist Refuel demand models")
-    parser.add_argument(
-        "--csv",
-        default=ROOT / "data" / "gym_badges_0630_2200_long.csv",
-        type=Path,
-        help="Path to the telemetry CSV (default: data/gym_badges_0630_2200_long.csv)",
-    )
-    parser.add_argument(
-        "--model-dir",
-        default=MODEL_DIR,
-        type=Path,
-        help="Directory where trained models should be stored (default: model/)",
-    )
-    parser.add_argument(
-        "--use-live-weather",
-        action="store_true",
-        help="Use the Open-Meteo API to enrich the dataset before training.",
-    )
-    return parser.parse_args()
+FEATURES = [
+    "visitors",
+    "cardio_share",
+    "temp_max_c",
+    "precip_mm",
+    "weekday",
+    "month",
+    "is_weekend",
+    "trend_score",
+]
 
 
-def train_offline(csv_path: Path, model_dir: Path, use_live_weather: bool = False) -> Tuple[Path, Path]:
-    if not csv_path.exists():
-        raise FileNotFoundError(f"Telemetry CSV not found: {csv_path}")
-    history = build_enriched_history(csv_path=csv_path, use_weather_api=use_live_weather)
-    if history.empty:
-        raise RuntimeError("Telemetry CSV is empty; cannot train models.")
-    feature_df = add_time_signals(history)
-    models = train_models(feature_df)
-    return save_models(models, model_dir=model_dir)
+def train_all():
+    # Ensure a place exists to store the per-product Ridge models.
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Load engineered features and the (currently empty) trend frame.
+    mix = load_product_mix("data/product_mix_daily.csv")
+    trends = load_trends()  # aktuell leer, später PyTrends
+    mix = attach_trends(mix, trends)
 
-def main() -> None:
-    args = _parse_args()
-    checkin_path, snack_path = train_offline(args.csv, args.model_dir, args.use_live_weather)
-    print("Saved models:")
-    print(f"  - check-ins: {checkin_path}")
-    print(f"  - snacks:    {snack_path}")
+    # Suggested quantity stands in for sales until real targets arrive.
+    target_col = "suggested_qty"
 
+    for product in mix["product"].unique():
+        dfp = mix[mix["product"] == product].dropna(subset=FEATURES + [target_col])
+
+        if len(dfp) < 20:
+            print(f"skip {product}: not enough rows ({len(dfp)})")
+            continue
+
+        X = dfp[FEATURES]
+        y = dfp[target_col]
+
+        model = Ridge(alpha=1.0, random_state=0)
+        model.fit(X, y)
+
+        # Save each product-specific model under a deterministic filename.
+        model_path = MODEL_DIR / f"ridge_{product.replace(' ', '_')}.joblib"
+        joblib.dump(model, model_path)
+        print(f"saved model for {product} with {len(dfp)} rows")
 
 if __name__ == "__main__":
-    main()
+    from sklearn.exceptions import ConvergenceWarning
+    import warnings
+    warnings.simplefilter("ignore", ConvergenceWarning)
+
+    train_all()
