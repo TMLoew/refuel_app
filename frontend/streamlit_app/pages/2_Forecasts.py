@@ -54,6 +54,7 @@ render_top_nav("2_Forecasts.py")
 st.title("Forecasts")
 st.caption("See likely visits and snack demand, then publish a simple order plan.")
 
+# Sidebar controls drive the scenario and the forecast horizon.
 with st.sidebar:
     sidebar_info_block()
     st.subheader("Forecast setup")
@@ -85,6 +86,7 @@ if data.empty:
     st.error("No data found. Upload a telemetry CSV in the Data Workbench first.")
     st.stop()
 
+# Train or load models, then prep mixes and prices for scenario exports.
 models = train_models(data)
 product_mix_df = load_product_mix_data()
 restock_policy = load_restock_policy()
@@ -94,6 +96,7 @@ latest_ts = data["timestamp"].max()
 history = data[data["timestamp"] >= latest_ts - pd.Timedelta(days=lookback_days)]
 scenario = WEATHER_SCENARIOS[weather_profile]
 scenario_history = history.copy()
+# Nudge history copy to reflect the chosen weather story (for charts and tables).
 scenario_history["temperature_c"] += scenario["temp_offset"] + manual_temp_shift
 scenario_history["precipitation_mm"] = np.clip(
     scenario_history["precipitation_mm"] * scenario["precip_multiplier"] + manual_precip_shift,
@@ -125,6 +128,7 @@ forecast_df = build_scenario_forecast(data, models, scenario_config)
 applied_horizon = forecast_df.attrs.get("applied_horizon_hours", horizon_hours) if not forecast_df.empty else 0
 live_weather_hours = forecast_df.attrs.get("live_weather_hours")
 
+# Quick KPIs before charts.
 col_a, col_b, col_c = st.columns(3)
 col_a.metric("Latest check-ins/hr", f"{scenario_history['checkins'].iloc[-1]:.0f}")
 col_b.metric("Snack revenue (24h)", f"CHF{scenario_history.tail(24)['snack_revenue'].sum():.0f}")
@@ -134,6 +138,7 @@ st.divider()
 if forecast_df.empty:
     st.warning("Need more telemetry to compute the forward forecast. Upload additional history first.")
 else:
+# Main forecast chart with history + future overlay.
     if use_weather_api and live_weather_hours:
         st.caption(f"Live weather for the first {live_weather_hours} hours; after that we extend using past patterns.")
     st.subheader(f"Forecast for the next {applied_horizon} hours")
@@ -214,6 +219,7 @@ else:
     st.plotly_chart(forecast_fig, use_container_width=True)
 
     dl_col, stat_col = st.columns([1, 1])
+    # Export raw forecast and show total units at a glance.
     csv_bytes = forecast_df.to_csv(index=False).encode("utf-8")
     dl_col.download_button(
         "⬇️ Download forecast CSV",
@@ -339,6 +345,7 @@ else:
             )
             publish = st.button("Publish scenario to procurement plan", use_container_width=True)
             if publish:
+                # Persist the scenario plan so other pages (e.g., Settings, Data Workbench) can load it.
                 plan_copy = plan_payload.copy()
                 plan_copy["date"] = pd.to_datetime(plan_copy["date"])
                 for key, value in scenario_metadata.items():
@@ -424,6 +431,7 @@ if not snack_df.empty:
 # --- Feature sensitivity --------------------------------------------------------
 checkin_model, snack_model = models
 if checkin_model is not None:
+    # Show which inputs the model leans on most.
     model_core = checkin_model.named_steps.get("model", checkin_model) if isinstance(checkin_model, Pipeline) else checkin_model
     importances = getattr(model_core, "feature_importances_", None)
     value_label = "importance"
@@ -450,6 +458,7 @@ if checkin_model is not None:
 
 # --- Residual diagnostics -------------------------------------------------------
 if checkin_model is not None:
+    # Quick residual plot to spot bias vs. temperature.
     feature_df = scenario_history.copy()
     feature_df["residuals_checkins"] = feature_df["checkins"] - checkin_model.predict(
         feature_df[CHECKIN_FEATURES]

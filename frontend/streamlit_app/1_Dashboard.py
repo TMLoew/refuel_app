@@ -132,6 +132,7 @@ st.set_page_config(
 
 
 def render_quick_actions(recent_window: pd.DataFrame) -> None:
+    # Jump to core tools and show headline metrics for the next 24 hours.
     hero_left, hero_right = st.columns([0.65, 0.35])
     with hero_left:
         hero_btn_cols = st.columns(2)
@@ -150,6 +151,7 @@ def render_quick_actions(recent_window: pd.DataFrame) -> None:
 
 
 def render_product_mix_outlook(product_mix_df: pd.DataFrame) -> None:
+    # Let users browse the merch mix by date and see cost implications.
     st.subheader("Product mix outlook")
     if not isinstance(product_mix_df, pd.DataFrame) or product_mix_df.empty:
         st.info("Product mix file not found yet. Drop `data/product_mix_daily.csv` to unlock mix insights.")
@@ -220,6 +222,7 @@ def render_product_mix_outlook(product_mix_df: pd.DataFrame) -> None:
 
 
 def render_pricing_hints(data: pd.DataFrame) -> None:
+    # Simple weekday averages to hint at price adjustments.
     st.subheader("Day-of-week pricing hints")
     if not {"weekday", "snack_units", "snack_price", "checkins"}.issubset(set(data.columns)):
         st.info("Pricing hints unavailable because required columns are missing.")
@@ -253,6 +256,7 @@ def render_pricing_hints(data: pd.DataFrame) -> None:
 
 
 def render_summary_cards(df: pd.DataFrame) -> None:
+    # Recent KPIs from the last 24 hours plus the single peak hour.
     recent = df.tail(24)
     col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Avg hourly check-ins (24h)", f"{recent['checkins'].mean():.1f}")
@@ -267,6 +271,7 @@ def render_summary_cards(df: pd.DataFrame) -> None:
 
 
 def render_history_charts(df: pd.DataFrame) -> None:
+    # Short history window to show usage vs snacks and a weather trend.
     history_window = df[df["timestamp"] >= df["timestamp"].max() - pd.Timedelta(days=5)]
     resampled = (
         history_window.set_index("timestamp")
@@ -324,6 +329,7 @@ def render_history_charts(df: pd.DataFrame) -> None:
 
 
 def render_weather_shotcast() -> None:
+    # Embed Windy map centered on saved coordinates.
     lat, lon = get_weather_coordinates()
     iframe = f"""
     <iframe
@@ -336,6 +342,7 @@ def render_weather_shotcast() -> None:
 
 
 def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
+    # Overlay actuals with scenario forecast and expose the raw table.
     if forecast.empty:
         st.warning("Not enough data to train the forecasting widgets yet.")
         return
@@ -455,6 +462,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
 
 
 def render_dashboard() -> None:
+    # Main page: wires up nav, sidebar controls, data load, and sections.
     render_top_nav("1_Dashboard.py", show_logo=False)
     st.title("Refuel Home")
     st.caption(

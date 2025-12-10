@@ -74,6 +74,7 @@ render_top_nav("7_POS_Console.py")
 st.title("POS Console")
 st.caption("Log sales and check-ins, keep shelf stock updated, and get quick low-stock warnings.")
 
+# Sidebar controls affect forecast comparison and restock guidance.
 with st.sidebar:
     sidebar_info_block()
     use_weather_api = st.toggle("Use live weather API", value=True, key="pos-weather")
@@ -214,6 +215,7 @@ with col_form:
 
 with col_alert:
     st.subheader("Live stock posture")
+    # Shared reorder settings so dashboard/POS use the same buffer.
     shared_reorder_default = st.session_state.get("inventory_reorder_days", 3)
     reorder_days = st.slider(
         "Restock coverage (days)",

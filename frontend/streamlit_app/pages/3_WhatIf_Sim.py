@@ -29,6 +29,7 @@ render_top_nav("3_WhatIf_Sim.py")
 st.title("Scenario Lab")
 st.caption("Compare two simple scenarios to see how demand shifts with weather, marketing, or price changes.")
 
+# Sidebar only toggles live weather; both scenarios share it.
 with st.sidebar:
     sidebar_info_block()
     use_weather_api = st.toggle("Use live weather", value=True, key="whatif-weather", help="Falls back to cached weather if the API is offline.")
@@ -52,6 +53,7 @@ default_scenario = {
 
 
 def scenario_form(label: str, defaults: dict):
+    # Form for a single scenario; returns a scenario dict.
     with st.expander(label, expanded=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -138,6 +140,7 @@ summary_df = pd.DataFrame(
 )
 summary_df["snack_margin_proxy"] = summary_df["snack_revenue"] - 1.5 * summary_df["snack_units"]
 
+# Compare totals and a rough profit proxy.
 st.subheader("Scenario comparison")
 metric_cols = st.columns(3)
 metric_cols[0].metric(

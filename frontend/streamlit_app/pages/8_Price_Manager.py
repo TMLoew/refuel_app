@@ -53,6 +53,7 @@ else:
     merged = price_df.copy()
 
 st.subheader("Edit price list")
+# Grid edits write to product_prices; refresh other tabs after saving to use the new numbers.
 st.info("After changing prices, refresh the dashboard/forecast tabs so they pick up the new values.")
 edited = st.data_editor(
     merged,

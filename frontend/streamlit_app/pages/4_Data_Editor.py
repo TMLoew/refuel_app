@@ -27,6 +27,7 @@ render_top_nav("4_Data_Editor.py")
 st.title("Data Workbench")
 st.caption("Swap in a new CSV, check a sample of rows, and retrain the simple forecasts.")
 
+# Upload + preview lets you replace the live telemetry file safely.
 st.subheader("Upload replacement data")
 uploaded = st.file_uploader("Drop a new `gym_badges.csv` to preview it", type=["csv"])
 if uploaded:
@@ -49,6 +50,7 @@ with st.sidebar:
     use_weather_api = st.toggle("Rebuild with live weather", value=False, key="editor-weather")
     sample_rows = st.slider("Rows to display", 50, 500, 200, step=50)
 
+# Load data (optionally with live weather) and slice the preview window.
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
     st.error("Upload `data/gym_badges.csv` to start exploring the dataset.")
@@ -75,6 +77,7 @@ edited = st.data_editor(
     key="editor-grid",
 )
 
+# Offer a CSV export of the edited slice (no auto-save).
 st.caption("Changes above are session-only; export below if you want to persist.")
 
 buffer = io.StringIO()

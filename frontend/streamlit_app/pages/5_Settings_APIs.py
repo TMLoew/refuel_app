@@ -249,7 +249,8 @@ def advance_autopilot_block(
 
 
 def render_autopilot_panel(data: pd.DataFrame, use_live_weather: bool) -> None:
-st.subheader("Weather-aware autopilot")
+    # Infinite-run autopilot simulator used from the Settings page.
+    st.subheader("Weather-aware autopilot")
     if data.empty:
         st.warning("Need telemetry to simulate autopilot scenarios. Upload a CSV first.")
         return
@@ -470,6 +471,7 @@ active_env = "Default"
 with st.sidebar:
     sidebar_info_block()
 
+# Weather profile form saves lat/lon and cache settings.
 st.subheader("Weather API configuration")
 profile = load_weather_profile()
 with st.form("weather-form"):

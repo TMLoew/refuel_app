@@ -36,6 +36,7 @@ render_top_nav("6_Statistics.py")
 st.title("Trends & Drivers")
 st.caption("Simple views to show how weather and visits affect snack sales.")
 
+# Sidebar: pick live vs cached weather and how many days to analyze.
 with st.sidebar:
     sidebar_info_block()
     st.subheader("Data slice")
@@ -68,6 +69,7 @@ overview_tab, drivers_tab, regression_tab, rhythm_tab = st.tabs(
 )
 
 with overview_tab:
+    # Quick correlations and highlights.
     st.subheader("Quick relationships")
     corr_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
     corr_matrix = window_df[corr_cols].corr()
@@ -101,6 +103,7 @@ with overview_tab:
     )
 
 with drivers_tab:
+    # Scatter views to eyeball relationships.
     st.subheader("How pairs of things move")
     pair_cols = ["temperature_c", "precipitation_mm", "checkins", "snack_units"]
     pair_fig = px.scatter_matrix(

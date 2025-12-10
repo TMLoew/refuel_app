@@ -40,7 +40,7 @@ def fetch_weather_hourly(start_utc: datetime, end_utc: datetime) -> pd.DataFrame
     df["ts_utc"] = pd.to_datetime(df["ts_utc"], utc=True)
     # keep only requested hours
     df = df[(df["ts_utc"] >= start_utc) & (df["ts_utc"] <= end_utc)]
-    # convenience: local time
+    # add local time columns for easier joins
     df["ts_local"] = df["ts_utc"].dt.tz_convert("Europe/Zurich")
     df["date_local"] = df["ts_local"].dt.date
     df["hour_local"] = df["ts_local"].dt.hour
@@ -57,7 +57,7 @@ def save_latest(hours_back: int = 168) -> str:
     return out
 
 def fetch_full_range(start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
-    """Chunked fetch across long ranges (Open-Meteo limit ~7 days per call)."""
+    """Fetch a long window by chunking calls (API allows ~7 days at once)."""
     frames = []
     cursor = start_utc
     while cursor <= end_utc:
@@ -73,7 +73,7 @@ def sync_weather_to_gym_csv(
     out_path: str = "data/weather_stgallen_hourly.csv",
     pad_days: int = 2,
 ) -> str:
-    """Align weather file to cover entire gym dataset range."""
+    """Make sure weather file covers the full gym CSV date range (with padding)."""
     p = resolve_gym_csv_path(gym_csv_path)
     if not p.exists():
         raise FileNotFoundError(f"Gym CSV missing: {p}")
