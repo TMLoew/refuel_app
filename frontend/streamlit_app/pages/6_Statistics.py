@@ -62,7 +62,7 @@ col_a, col_b, col_c, col_d = st.columns(4)
 col_a.metric("Latest temperature", f"{metrics_row['temperature_c']:.1f}°C", "Now")
 col_b.metric("Daily rainfall", f"{window_df['precipitation_mm'].tail(96).sum():.1f} mm", "Past day")
 col_c.metric("Check-ins (24h)", f"{window_df['checkins'].tail(96).sum():.0f}", "Past day")
-col_d.metric("Snack units (24h)", f"{window_df['snack_units'].tail(96).sum():.0f}", "Past day")
+col_d.metric("Units (24h)", f"{window_df['snack_units'].tail(96).sum():.0f}", "Past day")
 
 overview_tab, drivers_tab, regression_tab, rhythm_tab = st.tabs(
     ["Overview", "Drivers", "Regression", "Daily rhythm"]
@@ -138,7 +138,7 @@ with drivers_tab:
             x="precipitation_mm",
             y="snack_units",
             color="weather_label",
-            labels={"precipitation_mm": "Precipitation (mm)", "snack_units": "Snack units"},
+            labels={"precipitation_mm": "Precipitation (mm)", "snack_units": "Units"},
             trendline="ols",
             title="Precipitation vs. snack demand",
         ),
@@ -146,7 +146,7 @@ with drivers_tab:
     )
     st.markdown(
         "- Warmer days mean more visits, especially on weekends.\n"
-        "- Heavy rain usually lowers snack units unless it's just a light shower."
+        "- Heavy rain usually lowers units unless it's just a light shower."
     )
 
 with regression_tab:

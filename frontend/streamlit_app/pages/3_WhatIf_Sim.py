@@ -191,14 +191,14 @@ for scenario, df_slice in combined.groupby("scenario"):
             x=df_slice["timestamp"],
             y=df_slice["pred_snack_units"],
             mode="lines",
-            name=f"Snack units {scenario}",
+            name=f"Units {scenario}",
             yaxis="y2",
             line=dict(dash="dash"),
         )
     )
 line_fig.update_layout(
     yaxis=dict(title="Check-ins"),
-    yaxis2=dict(title="Snack units", overlaying="y", side="right"),
+    yaxis2=dict(title="Units", overlaying="y", side="right"),
     title="Hourly demand lines",
 )
 st.plotly_chart(line_fig, use_container_width=True)

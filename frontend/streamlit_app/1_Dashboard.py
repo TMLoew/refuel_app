@@ -345,7 +345,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             x=combined["timestamp"],
             y=combined["actual_snacks"],
             mode="lines",
-            name="Actual snack units",
+            name="Actual units",
             line=dict(color="#F18F01"),
             yaxis="y2",
         )
@@ -355,7 +355,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
             x=combined["timestamp"],
             y=combined["pred_snack_units"],
             mode="lines",
-            name="Forecast snack units",
+            name="Forecast units",
             line=dict(color="#F18F01", dash="dash"),
             yaxis="y2",
         )
@@ -364,7 +364,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
         title="Scenario forecast",
         xaxis_title="Timestamp",
         yaxis=dict(title="Check-ins"),
-        yaxis2=dict(title="Snack units", overlaying="y", side="right"),
+        yaxis2=dict(title="Units", overlaying="y", side="right"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=420,
         shapes=[
@@ -390,7 +390,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
         f"{forecast['pred_checkins'].max():.0f} peak/hr",
     )
     kpi_cols[1].metric(
-        "Forecast snack units",
+        "Forecast units",
         f"{forecast['pred_snack_units'].sum():.0f}",
         f"{forecast['pred_snack_units'].max():.0f} peak/hr",
     )
@@ -417,7 +417,7 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
                 "temperature_c": "Temp (°C)",
                 "precipitation_mm": "Precip (mm)",
                 "pred_checkins": "Check-ins",
-                "pred_snack_units": "Snack units",
+                "pred_snack_units": "Units",
                 "snack_price": "Snack price (CHF)",
                 "pred_snack_revenue": "Snack revenue (CHF)",
             }
@@ -517,7 +517,7 @@ def render_dashboard() -> None:
     st.markdown(
         """
 1. **Add data** – Put your newest gym+snack CSV in `data/`, turn on live weather if you want.
-2. **Run models** – The app trains simple models to forecast check-ins and snack units.
+2. **Run models** – The app trains simple models to forecast check-ins and units.
 3. **Take action** – Use sliders, POS, and Price Manager to export plans and set prices.
 """
     )

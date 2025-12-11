@@ -180,7 +180,7 @@ else:
             x=combined["timestamp"],
             y=combined["actual_snacks"],
             mode="lines",
-            name="Actual snack units",
+            name="Actual units",
             line=dict(color=CORAL, width=2),
             yaxis="y2",
         )
@@ -190,7 +190,7 @@ else:
             x=combined["timestamp"],
             y=combined["pred_snack_units"],
             mode="lines",
-            name="Forecast snack units",
+            name="Forecast units",
             line=dict(color=YELLOW, dash="dash", width=2),
             yaxis="y2",
         )
@@ -199,7 +199,7 @@ else:
         title=f"Forecast window: next {applied_horizon} hours",
         xaxis_title="Timestamp",
         yaxis_title="Check-ins",
-        yaxis2=dict(title="Snack units", overlaying="y", side="right"),
+        yaxis2=dict(title="Units", overlaying="y", side="right"),
         height=420,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         shapes=[
@@ -305,7 +305,7 @@ else:
         else "Auto restock OFF · configure on the POS Console to automate stock protection."
     )
     st.info(
-        f"{auto_caption} · This scenario expects {total_units:.0f} snack units over the next {applied_horizon} hours.",
+        f"{auto_caption} · This scenario expects {total_units:.0f} units over the next {applied_horizon} hours.",
         icon="ℹ️",
     )
     if 'plan_payload' in locals() and not plan_payload.empty:
@@ -422,7 +422,7 @@ if not snack_df.empty:
         y="snack_units",
         color=color_field,
         trendline="ols",
-        labels={"checkins": "Gym check-ins", "snack_units": "Snack units"},
+        labels={"checkins": "Gym check-ins", "snack_units": "Units"},
         title="Snacks vs. visits",
         hover_data=["temperature_c"],
     )
