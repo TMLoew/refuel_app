@@ -1,6 +1,6 @@
 # Refuel Operations Cockpit
 
-Refuel is a Streamlit app that helps a gym shop plan snacks and drinks using simple forecasts, live weather, and a few editable CSV files.
+Refuel is a Streamlit app that helps a gym shop plan drinks using simple forecasts, live weather, and a few editable CSV files.
 
 ## Quick start
 
@@ -29,7 +29,7 @@ Files the app expects:
 ## Data and models
 
 - Everything is file-based and readable: product mix, prices, POS log, procurement plan, and restock policy all live in `data/`.
-- Forecasts use small scikit-learn models (decision-tree ensembles) saved to `model/checkins_hgb.joblib` and `model/snacks_hgb.joblib`. They learn simple links between weather/price/promo settings and demand. Retrain from the Data Workbench after you change the CSVs.
+- Forecasts use small scikit-learn models (decision-tree ensembles) saved to `model/checkins_hgb.joblib` and `model/snacks_hgb.joblib`. They learn simple links between weather/price/promo settings and demand (drinks). Retrain from the Data Workbench after you change the CSVs.
 - Weather is either pulled live or loaded from the cached CSV so the app works offline.
 
 ## Scripts (optional)

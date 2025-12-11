@@ -1,6 +1,6 @@
 # Refuel Ops – Student Guide
 
-This guide explains the project in plain language so any bachelor-level contributor can run, edit, and extend it. The app is a Streamlit dashboard for a gym shop: it combines weather, check-ins, and snack sales to suggest prices, stock, and simple plans.
+This guide explains the project in plain language so any bachelor-level contributor can run, edit, and extend it. The app is a Streamlit dashboard for a gym shop: it combines weather, check-ins, and drink sales to suggest prices, stock, and simple plans.
 
 ---
 
@@ -23,7 +23,7 @@ The app reads and writes local CSV/JSON files only, so it works offline. Live we
 - `frontend/streamlit_app/components/layout.py` – shared navigation and theme helpers.
 - `frontend/streamlit_app/services/data_utils.py` – all data loading/saving, forecasting, and autopilot helpers.
 - `data/` – every CSV/JSON the app needs (telemetry, prices, product mix, POS log, restock policy, procurement plan).
-- `model/` – saved models for check-ins and snacks.
+- `model/` – saved models for check-ins and drinks.
 - `backend/` – optional scripts to rebuild datasets.
 - `docs/` – documentation (this file plus others).
 
@@ -33,7 +33,7 @@ The app reads and writes local CSV/JSON files only, so it works offline. Live we
 
 | File | What it stores |
 |------|----------------|
-| `data/gym_badges*.csv` | Check-ins, snack sales, and weather columns; the main input. |
+| `data/gym_badges*.csv` | Check-ins, drink sales, and weather columns; the main input. |
 | `data/weather_cache.csv` | Cached weather so the app can work without the API. |
 | `data/product_mix_daily.csv` | List of products and planned daily units. |
 | `data/product_prices.csv` | Price list used by forecasts and the Price Manager. |
@@ -124,7 +124,7 @@ Everything is human-readable. If a file is missing, most pages will show an erro
 | Term | Meaning here |
 |------|--------------|
 | **SKU** | A single product, like “Protein Shake.” |
-| **Telemetry** | The raw table of check-ins, snack sales, and weather. |
+| **Telemetry** | The raw table of check-ins, drink sales, and weather. |
 | **Scenario** | A set of slider choices (weather, marketing, price) for a forecast. |
 | **POS log** | The file that stores every sale or restock entry. |
 | **Safety stock** | A buffer level where we warn before running out. |

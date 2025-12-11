@@ -142,12 +142,12 @@ def render_quick_actions(recent_window: pd.DataFrame) -> None:
             st.switch_page("pages/7_POS_Console.py")
     with hero_right:
         st.metric("Next 24h check-ins", f"{recent_window['checkins'].sum():.0f}")
-        st.metric("Next 24h snack units", f"{recent_window['snack_units'].sum():.0f}")
-        st.metric(
-            "Avg snack price",
-            f"CHF{recent_window['snack_price'].mean():.2f}",
-            help="Weighted mean over the latest 24 hours.",
-        )
+    st.metric("Next 24h drink units", f"{recent_window['snack_units'].sum():.0f}")
+    st.metric(
+        "Avg drink price",
+        f"CHF{recent_window['snack_price'].mean():.2f}",
+        help="Weighted mean over the latest 24 hours.",
+    )
 
 
 def render_product_mix_outlook(product_mix_df: pd.DataFrame) -> None:
@@ -226,8 +226,8 @@ def render_summary_cards(df: pd.DataFrame) -> None:
     recent = df.tail(24)
     col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Avg hourly check-ins (24h)", f"{recent['checkins'].mean():.1f}")
-    col_b.metric("Snack units sold (24h)", f"{recent['snack_units'].sum():.0f}")
-    col_c.metric("Snack revenue (24h)", f"CHF{recent['snack_revenue'].sum():.0f}")
+    col_b.metric("Drink units sold (24h)", f"{recent['snack_units'].sum():.0f}")
+    col_c.metric("Drink revenue (24h)", f"CHF{recent['snack_revenue'].sum():.0f}")
     peak_hour = df.loc[df["checkins"].idxmax()]
     col_d.metric(
         "Peak load",
@@ -264,17 +264,17 @@ def render_history_charts(df: pd.DataFrame) -> None:
             x=resampled["timestamp"],
             y=resampled["snack_units"],
             mode="lines",
-            name="Snack units",
+            name="Drink units",
             yaxis="y2",
             line=dict(color="#F18F01", width=2, shape="spline"),
-            hovertemplate="Snack units: %{y:.0f}<br>%{x|%a %H:%M}",
+            hovertemplate="Drink units: %{y:.0f}<br>%{x|%a %H:%M}",
         )
     )
     usage_fig.update_layout(
         title="Gym traffic vs. snack demand",
         xaxis_title="Timestamp",
         yaxis_title="Check-ins",
-        yaxis2=dict(title="Snack units", overlaying="y", side="right"),
+        yaxis2=dict(title="Drink units", overlaying="y", side="right"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=380,
         margin=dict(t=60, b=10, l=60, r=60),
@@ -699,7 +699,7 @@ def render_dashboard() -> None:
             )
     product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
     if not product_forecast.empty:
-        st.caption("Next 3 days · snack demand split by merchandise plan")
+    st.caption("Next 3 days · drink demand split by merchandise plan")
         hover_tip(
             "ℹ️ Mix allocation",
             "Each day's total snack forecast is split by the mix weights: "
