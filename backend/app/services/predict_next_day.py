@@ -30,6 +30,7 @@ def latest_day_rows() -> pd.DataFrame:
     today["month"] = nd.month
     today["is_weekend"] = (today["weekday"] >= 5).astype(int)
 
+    # Trends stub keeps the pipeline stable until we ingest real signals.
     trends = load_trends()  # aktuell leer, später PyTrends
     today = attach_trends(today, trends)
     return today
@@ -45,6 +46,7 @@ def predict_next_day():
             print(f"no model for {prod}, skipping")
             continue
 
+        # Load the pre-trained Ridge model per product and build the feature vector.
         model = joblib.load(model_path)
         x = r[FEATURES].values.reshape(1, -1)
         yhat = float(model.predict(x)[0])
@@ -64,4 +66,3 @@ def predict_next_day():
 
 if __name__ == "__main__":
     predict_next_day()
-

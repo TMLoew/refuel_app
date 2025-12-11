@@ -17,3 +17,12 @@ def load_product_mix(path="data/product_mix_daily.csv") -> pd.DataFrame:
     df["trend_score"] = 0.5
     return df
 
+
+def load_trends(path="data/trends_3m_CH.csv") -> pd.DataFrame:
+    # Placeholder return until actual trend data is available.
+    return pd.DataFrame()
+
+
+def attach_trends(mix: pd.DataFrame, trends: pd.DataFrame) -> pd.DataFrame:
+    # No-op for now because the trend source is still empty.
+    return mix
