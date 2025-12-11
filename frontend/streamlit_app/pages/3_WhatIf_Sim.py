@@ -27,11 +27,12 @@ st.set_page_config(page_title="What-if Simulator", page_icon=PAGE_ICON, layout="
 
 render_top_nav("3_WhatIf_Sim.py")
 st.title("Scenario Lab")
-st.caption("Stack two competing scenarios, stress test the demand outlook, and quantify the upside/downside.")
+st.caption("Compare two simple scenarios to see how demand shifts with weather, marketing, or price changes.")
 
+# Sidebar only toggles live weather; both scenarios share it.
 with st.sidebar:
     sidebar_info_block()
-    use_weather_api = st.toggle("Use live weather API", value=True, key="whatif-weather")
+    use_weather_api = st.toggle("Use live weather", value=True, key="whatif-weather", help="Falls back to cached weather if the API is offline.")
 
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
@@ -52,6 +53,7 @@ default_scenario = {
 
 
 def scenario_form(label: str, defaults: dict):
+    # Form for a single scenario; returns a scenario dict.
     with st.expander(label, expanded=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -138,20 +140,21 @@ summary_df = pd.DataFrame(
 )
 summary_df["snack_margin_proxy"] = summary_df["snack_revenue"] - 1.5 * summary_df["snack_units"]
 
+# Compare totals and a rough profit proxy.
 st.subheader("Scenario comparison")
 metric_cols = st.columns(3)
 metric_cols[0].metric(
-    "Snack revenue delta",
+    "Snack revenue change",
     f"CHF{summary_df.loc[1, 'snack_revenue'] - summary_df.loc[0, 'snack_revenue']:.0f}",
     f"{(summary_df.loc[1, 'snack_revenue'] / summary_df.loc[0, 'snack_revenue'] - 1)*100:.1f}%",
 )
 metric_cols[1].metric(
-    "Check-ins delta",
+    "Check-ins change",
     f"{summary_df.loc[1, 'checkins'] - summary_df.loc[0, 'checkins']:.0f}",
     f"{(summary_df.loc[1, 'checkins'] / summary_df.loc[0, 'checkins'] - 1)*100:.1f}%",
 )
 metric_cols[2].metric(
-    "Snack margin proxy delta",
+    "Snack profit rough change",
     f"CHF{summary_df.loc[1, 'snack_margin_proxy'] - summary_df.loc[0, 'snack_margin_proxy']:.0f}",
 )
 
@@ -196,7 +199,7 @@ for scenario, df_slice in combined.groupby("scenario"):
 line_fig.update_layout(
     yaxis=dict(title="Check-ins"),
     yaxis2=dict(title="Snack units", overlaying="y", side="right"),
-    title="Projected hourly demand profiles",
+    title="Hourly demand lines",
 )
 st.plotly_chart(line_fig, use_container_width=True)
 

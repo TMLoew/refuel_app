@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+from streamlit.runtime.secrets import StreamlitSecretNotFoundError
 
 from frontend.streamlit_app.components.layout import (
     render_top_nav,
@@ -20,10 +21,14 @@ from frontend.streamlit_app.components.layout import (
     render_footer,
     get_logo_path,
 )
+MODEL_DIR = ROOT_DIR / "model"
+CHECKIN_MODEL_FILE = MODEL_DIR / "checkins_hgb.joblib"
+SNACK_MODEL_FILE = MODEL_DIR / "snacks_hgb.joblib"
 try:
     from frontend.streamlit_app.services.data_utils import (
         load_enriched_data,
         load_pos_log,
+        load_product_mix_data,
         load_weather_profile,
         save_weather_profile,
         build_scenario_forecast,
@@ -32,7 +37,7 @@ try:
         WEATHER_SCENARIOS,
     )
 except ImportError:
-    from frontend.streamlit_app.services.data_utils import load_enriched_data, load_pos_log  # type: ignore
+    from frontend.streamlit_app.services.data_utils import load_enriched_data, load_pos_log, load_product_mix_data  # type: ignore
 
     def load_weather_profile() -> dict:  # type: ignore[misc]
         return {"lat": 47.4239, "lon": 9.3748, "api_timeout": 10, "cache_hours": 6}
@@ -245,13 +250,14 @@ def advance_autopilot_block(
 
 
 def render_autopilot_panel(data: pd.DataFrame, use_live_weather: bool) -> None:
+    # Infinite-run autopilot simulator used from the Settings page.
     st.subheader("Weather-aware autopilot")
     if data.empty:
         st.warning("Need telemetry to simulate autopilot scenarios. Upload a CSV first.")
         return
     models = train_models(data)
     if not models or models[0] is None or models[1] is None:
-        st.warning("Need more telemetry to train the forecast models. Revisit after uploading additional data.")
+        st.warning("Need more data to train the forecast models. Upload more rows, then try again.")
         return
 
     daily_summary = (
@@ -387,7 +393,7 @@ def render_autopilot_panel(data: pd.DataFrame, use_live_weather: bool) -> None:
     autop_history = st.session_state["autopilot_history"]
     autop_status = "Running" if st.session_state["autopilot_running"] else "Paused"
     st.caption(
-        f"Status: **{autop_status}** · data persisted to `{AUTOPILOT_STATE_FILE.name}` (share this CSV or reload it later)."
+        f"Status: **{autop_status}** · data is saved to `{AUTOPILOT_STATE_FILE.name}` so you can reopen it later."
     )
 
     if autop_history.empty:
@@ -460,12 +466,46 @@ st.set_page_config(page_title="Settings & APIs", page_icon=PAGE_ICON, layout="wi
 
 render_top_nav("5_Settings_APIs.py")
 st.title("Settings & API Console")
-st.caption("Manage external data hooks, monitor credentials, and run quick health checks.")
+st.caption("Manage weather settings, quick health checks, and simple automation controls.")
 active_env = "Default"
 
 with st.sidebar:
     sidebar_info_block()
 
+# Data freshness indicators for key files.
+telemetry_df = load_enriched_data(use_weather_api=False)
+mix_df = load_product_mix_data()
+pos_df = load_pos_log()
+now_utc = pd.Timestamp.now(timezone.utc)
+
+def _age_status(ts: Optional[pd.Timestamp], warn_hours: float = 24.0) -> tuple[str, str]:
+    if ts is None:
+        return ("❌ Missing", "no data")
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    hours = max(0, (now_utc - ts).total_seconds() / 3600)
+    label = f"{hours:.0f}h old" if hours >= 1 else f"{hours*60:.0f}m old"
+    status = "✅ Fresh" if hours <= warn_hours else "⚠️ Stale"
+    return status, label
+
+telemetry_ts = telemetry_df["timestamp"].max() if not telemetry_df.empty and "timestamp" in telemetry_df else None
+mix_ts = mix_df["date"].max() if not mix_df.empty and "date" in mix_df else None
+pos_ts = pos_df["timestamp"].max() if not pos_df.empty and "timestamp" in pos_df else None
+wx_cache = ROOT_DIR / "data" / "weather_cache.csv"
+wx_ts = pd.to_datetime(wx_cache.stat().st_mtime, unit="s", utc=True) if wx_cache.exists() else None
+
+st.subheader("Data freshness")
+st.caption("Refresh files if you see stale or missing status; forecasts rely on these inputs.")
+d_cols = st.columns(4)
+for col, name, ts in zip(
+    d_cols,
+    ["Telemetry", "Product mix", "POS log", "Weather cache"],
+    [telemetry_ts, mix_ts, pos_ts, wx_ts],
+):
+    status, age = _age_status(pd.to_datetime(ts) if ts is not None else None, warn_hours=24)
+    col.metric(name, status, age)
+
+# Weather profile form saves lat/lon and cache settings.
 st.subheader("Weather API configuration")
 profile = load_weather_profile()
 with st.form("weather-form"):
@@ -496,6 +536,42 @@ elif weather_meta:
 else:
     weather_value = "ℹ️ Pending"
     weather_delta = "no API calls yet"
+
+# Model lifecycle
+st.subheader("Forecast models")
+st.caption("Retrain the saved models on the current dataset (overwrites the joblib files).")
+retrain_cols = st.columns([0.4, 0.6])
+with retrain_cols[0]:
+    retrain_clicked = st.button("🔄 Retrain models on current data", type="primary")
+with retrain_cols[1]:
+    st.caption(f"Model files: `{CHECKIN_MODEL_FILE.name}`, `{SNACK_MODEL_FILE.name}`")
+
+if retrain_clicked:
+    data_for_training = load_enriched_data(use_weather_api=True, cache_buster=pd.Timestamp.utcnow().timestamp())
+    if data_for_training.empty:
+        st.error("No data available to train. Upload telemetry first.")
+    else:
+        # Clear persisted models and cached resource to force fresh training
+        for model_path in (CHECKIN_MODEL_FILE, SNACK_MODEL_FILE):
+            try:
+                if model_path.exists():
+                    model_path.unlink()
+            except Exception as exc:  # pragma: no cover - streamlit interaction
+                st.warning(f"Could not remove {model_path.name}: {exc}")
+        try:
+            train_models.clear()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        with st.spinner("Training attendance and snack models..."):
+            try:
+                models = train_models(data_for_training)
+            except Exception as exc:  # pragma: no cover - streamlit interaction
+                st.error(f"Training failed: {exc}")
+                models = (None, None)
+        if models and all(models):
+            st.success("Models retrained and saved. Forecast pages will use the new fit.")
+        else:
+            st.warning("Models were not produced. Check logs and dataset completeness.")
 
 now_utc = pd.Timestamp.now(timezone.utc)
 if data_sample.empty or "timestamp" not in data_sample.columns:
@@ -560,7 +636,11 @@ export_blob = json.dumps({"env": active_env, "lat": float(lat), "lon": float(lon
 st.download_button("Download config JSON", export_blob, file_name="refuel_config.json", mime="application/json")
 
 st.subheader("Advanced automation (restricted)")
-ops_secret = st.secrets.get("OPS_PASSWORD") or st.secrets.get("ops_password")
+try:
+    ops_secret = st.secrets.get("OPS_PASSWORD") or st.secrets.get("ops_password")
+except StreamlitSecretNotFoundError:
+    ops_secret = None
+
 if not ops_secret:
     st.info("Set OPS_PASSWORD in `.streamlit/secrets.toml` to unlock the procurement autopilot controls.")
 else:

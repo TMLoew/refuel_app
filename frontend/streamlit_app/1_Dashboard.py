@@ -27,6 +27,7 @@ try:
         get_product_price_map,
         get_weather_coordinates,
         load_enriched_data,
+        save_weather_profile,
         load_product_mix_data,
         load_product_mix_snapshot,
         load_restock_policy,
@@ -69,7 +70,9 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
             build_daily_product_mix_view,
             compute_daily_actuals,
             get_product_price_map,
+            get_weather_coordinates,
             load_enriched_data,
+            save_weather_profile,
             load_product_mix_data,
             load_product_mix_snapshot,
             load_restock_policy,
@@ -89,15 +92,17 @@ except (ModuleNotFoundError, ImportError) as _abs_exc:
                 allocate_product_level_forecast,
                 build_daily_forecast,
                 build_scenario_forecast,
-                build_daily_product_mix_view,
-                compute_daily_actuals,
-                get_product_price_map,
-                load_enriched_data,
-                load_product_mix_data,
-                load_product_mix_snapshot,
-                load_restock_policy,
-                save_product_mix_snapshot,
-                train_models,
+            build_daily_product_mix_view,
+            compute_daily_actuals,
+            get_product_price_map,
+            get_weather_coordinates,
+            load_enriched_data,
+            save_weather_profile,
+            load_product_mix_data,
+            load_product_mix_snapshot,
+            load_restock_policy,
+            save_product_mix_snapshot,
+            train_models,
             )
             from services import weather_pipeline  # type: ignore
         except Exception as _local_exc:
@@ -120,18 +125,109 @@ except ImportError:
 # --- End import bootstrap ---
 
 st.set_page_config(
-    page_title="Refuel Ops Dashboard",
+    page_title="Refuel Home",
     layout="wide",
     page_icon="💪",
 )
 
 
+def render_quick_actions(recent_window: pd.DataFrame) -> None:
+    # Jump to core tools and show headline metrics for the next 24 hours.
+    hero_left, hero_right = st.columns([0.65, 0.35])
+    with hero_left:
+        hero_btn_cols = st.columns(2)
+        if hero_btn_cols[0].button("🔮 Run Forecast", use_container_width=True):
+            st.switch_page("pages/2_Forecasts.py")
+        if hero_btn_cols[1].button("🧾 POS Console", use_container_width=True):
+            st.switch_page("pages/7_POS_Console.py")
+    with hero_right:
+        st.metric("Next 24h check-ins", f"{recent_window['checkins'].sum():.0f}")
+    st.metric("Next 24h drink units", f"{recent_window['snack_units'].sum():.0f}")
+    st.metric(
+        "Avg drink price",
+        f"CHF{recent_window['snack_price'].mean():.2f}",
+        help="Weighted mean over the latest 24 hours.",
+    )
+
+
+def render_product_mix_outlook(product_mix_df: pd.DataFrame) -> None:
+    # Let users browse the merch mix by date and see cost implications.
+    st.subheader("Product mix outlook")
+    if not isinstance(product_mix_df, pd.DataFrame) or product_mix_df.empty:
+        st.info("Product mix file not found yet. Drop `data/product_mix_daily.csv` to unlock mix insights.")
+        return
+
+    mix_dates = sorted(product_mix_df["date"].dt.date.unique())
+    if not mix_dates:
+        st.info("No product mix rows available yet.")
+        return
+
+    default_mix_date = mix_dates[-1]
+    selected_mix_date = st.select_slider(
+        "Product mix date",
+        options=mix_dates,
+        value=default_mix_date,
+        key="mix-date-dashboard",
+        help="Choose a day to inspect the recommended assortment and quantities.",
+    )
+    mix_slice = product_mix_df[product_mix_df["date"].dt.date == selected_mix_date].copy()
+    if mix_slice.empty:
+        st.info("No product mix rows for the selected date.")
+        return
+
+    mix_slice["weight_pct"] = mix_slice["weight"] * 100
+    mix_cost = st.slider(
+        "Assumed unit cost (CHF)",
+        min_value=0.5,
+        max_value=10.0,
+        value=3.5,
+        step=0.1,
+        key="mix-cost-dashboard",
+    )
+    mix_slice["cost_estimate"] = mix_slice["suggested_qty"] * mix_cost
+    info_cols = st.columns(3)
+    info_cols[0].metric("Visitors", f"{int(mix_slice['visitors'].iloc[0]):,}")
+    info_cols[1].metric("Cardio share", f"{mix_slice['cardio_share'].iloc[0]*100:.1f}%")
+    info_cols[2].metric(
+        "Weather",
+        f"{mix_slice['temp_max_c'].iloc[0]:.1f}°C · {mix_slice['precip_mm'].iloc[0]:.1f} mm",
+    )
+    mix_fig = px.bar(
+        mix_slice,
+        x="product",
+        y="weight_pct",
+        color="season",
+        title=f"Recommended product share · {selected_mix_date}",
+        labels={"weight_pct": "Mix share (%)", "product": "", "season": "Season"},
+    )
+    st.plotly_chart(mix_fig, use_container_width=True)
+    st.dataframe(
+        mix_slice[
+            ["product", "suggested_qty", "weight_pct", "cost_estimate", "hot_day", "rainy_day"]
+        ]
+        .rename(
+            columns={
+                "product": "Product",
+                "suggested_qty": "Suggested Qty",
+                "weight_pct": "Mix Share (%)",
+                "cost_estimate": "Est. Cost (CHF)",
+                "hot_day": "Hot?",
+                "rainy_day": "Rainy?",
+            }
+        )
+        .style.format({"Suggested Qty": "{:.0f}", "Mix Share (%)": "{:.1f}", "Est. Cost (CHF)": "CHF{:.0f}"}),
+        use_container_width=True,
+        height=260,
+    )
+
+
 def render_summary_cards(df: pd.DataFrame) -> None:
+    # Recent KPIs from the last 24 hours plus the single peak hour.
     recent = df.tail(24)
     col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Avg hourly check-ins (24h)", f"{recent['checkins'].mean():.1f}")
-    col_b.metric("Snack units sold (24h)", f"{recent['snack_units'].sum():.0f}")
-    col_c.metric("Snack revenue (24h)", f"CHF{recent['snack_revenue'].sum():.0f}")
+    col_b.metric("Drink units sold (24h)", f"{recent['snack_units'].sum():.0f}")
+    col_c.metric("Drink revenue (24h)", f"CHF{recent['snack_revenue'].sum():.0f}")
     peak_hour = df.loc[df["checkins"].idxmax()]
     col_d.metric(
         "Peak load",
@@ -141,11 +237,12 @@ def render_summary_cards(df: pd.DataFrame) -> None:
 
 
 def render_history_charts(df: pd.DataFrame) -> None:
+    # Short history window to show usage vs snacks and a weather trend.
     history_window = df[df["timestamp"] >= df["timestamp"].max() - pd.Timedelta(days=5)]
     resampled = (
         history_window.set_index("timestamp")
         .resample("60min")
-        .mean()
+        .mean(numeric_only=True)
         .dropna(subset=["checkins", "snack_units"])
         .reset_index()
     )
@@ -167,17 +264,17 @@ def render_history_charts(df: pd.DataFrame) -> None:
             x=resampled["timestamp"],
             y=resampled["snack_units"],
             mode="lines",
-            name="Snack units",
+            name="Drink units",
             yaxis="y2",
             line=dict(color="#F18F01", width=2, shape="spline"),
-            hovertemplate="Snack units: %{y:.0f}<br>%{x|%a %H:%M}",
+            hovertemplate="Drink units: %{y:.0f}<br>%{x|%a %H:%M}",
         )
     )
     usage_fig.update_layout(
         title="Gym traffic vs. snack demand",
         xaxis_title="Timestamp",
         yaxis_title="Check-ins",
-        yaxis2=dict(title="Snack units", overlaying="y", side="right"),
+        yaxis2=dict(title="Drink units", overlaying="y", side="right"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=380,
         margin=dict(t=60, b=10, l=60, r=60),
@@ -198,6 +295,7 @@ def render_history_charts(df: pd.DataFrame) -> None:
 
 
 def render_weather_shotcast() -> None:
+    # Embed Windy map centered on saved coordinates.
     lat, lon = get_weather_coordinates()
     iframe = f"""
     <iframe
@@ -210,6 +308,7 @@ def render_weather_shotcast() -> None:
 
 
 def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> None:
+    # Overlay actuals with scenario forecast and expose the raw table.
     if forecast.empty:
         st.warning("Not enough data to train the forecasting widgets yet.")
         return
@@ -329,16 +428,17 @@ def render_forecast_section(history: pd.DataFrame, forecast: pd.DataFrame) -> No
 
 
 def render_dashboard() -> None:
+    # Main page: wires up nav, sidebar controls, data load, and sections.
     render_top_nav("1_Dashboard.py", show_logo=False)
-    st.title("Refuel Performance Cockpit")
+    st.title("Refuel Home")
     st.caption(
-        "Blending weather mood, gym traffic, and snack behavior to guide staffing, procurement, and marketing."
+        "Simple view of weather, gym traffic, and snacks so you can plan stock and pricing."
     )
 
     with st.sidebar:
         sidebar_info_block()
         st.subheader("Scenario controls")
-        use_weather_api = st.toggle("Use live weather API", value=True)
+        use_weather_api = st.toggle("Use live weather", value=True, help="Pulls Open-Meteo if available; otherwise uses saved data.")
 
     with st.spinner("Loading telemetry and contextual data..."):
         data = load_enriched_data(use_weather_api=use_weather_api)
@@ -359,7 +459,8 @@ def render_dashboard() -> None:
 
     with st.sidebar:
         with st.expander("Weather & demand levers", expanded=True):
-            horizon_hours = st.slider("Forecast horizon (hours)", min_value=6, max_value=72, value=24, step=6)
+            horizon_hours = st.slider("Forecast horizon (hours)", min_value=6, max_value=168, value=24, step=6)
+            st.caption("Up to 7 days ahead; later hours are less reliable.")
             weather_pattern = st.selectbox("Weather pattern", list(WEATHER_SCENARIOS.keys()))
             temp_manual = st.slider("Manual temperature shift (°C)", min_value=-8, max_value=8, value=0)
             precip_manual = st.slider(
@@ -407,11 +508,25 @@ def render_dashboard() -> None:
     )
     st.caption(restock_caption)
 
+    recent_window = data.tail(24)
+    render_quick_actions(recent_window)
+    st.info(
+        "Use the quick buttons or the sidebar sliders to open tools. The settings here match what those pages use."
+    )
+    st.subheader("How Refuel Works")
+    st.markdown(
+        """
+1. **Add data** – Put your newest gym+snack CSV in `data/`, turn on live weather if you want.
+2. **Run models** – The app trains simple models to forecast check-ins and snack units.
+3. **Take action** – Use sliders, POS, and Price Manager to export plans and set prices.
+"""
+    )
+
     render_summary_cards(data)
     render_history_charts(data)
     st.subheader("Weather shotcast")
     info_col, btn_col = st.columns([0.75, 0.25])
-    info_col.caption("Windy radar & cloud layers centered on the configured coordinates.")
+    info_col.caption("Windy map centered on your saved location.")
     if btn_col.button("Center on St. Gallen", key="shotcast-center-root"):
         save_weather_profile(
             {
@@ -420,7 +535,7 @@ def render_dashboard() -> None:
             }
         )
         st.success("Shotcast centered on St. Gallen.")
-        st.experimental_rerun()
+        st.rerun()
     render_weather_shotcast()
 
     if isinstance(product_mix_df, pd.DataFrame) and not product_mix_df.empty:
@@ -435,7 +550,7 @@ def render_dashboard() -> None:
         days_old = (pd.Timestamp.now().normalize() - latest_mix_date.normalize()).days
         if days_old > 1:
             st.warning(
-                f"Product mix snapshot is {days_old} day(s) old. Update `data/product_mix_daily.csv` to reflect the latest plan."
+                f"Product mix snapshot is {days_old} day(s) old. Update `data/product_mix_daily.csv` to refresh the plan."
             )
         mix_cols = st.columns(3)
         mix_cols[0].metric("Snapshot date", latest_mix_date.strftime("%Y-%m-%d"))
@@ -481,6 +596,8 @@ def render_dashboard() -> None:
         )
     else:
         st.info("No product mix data detected. Upload `data/product_mix_daily.csv` to populate this snapshot.")
+
+    render_product_mix_outlook(product_mix_df)
 
     merged_mix_view = build_daily_product_mix_view(data, product_mix_df)
     if not merged_mix_view.empty:
@@ -541,28 +658,32 @@ def render_dashboard() -> None:
             "ℹ️ Aggregation math",
             "Daily table sums hourly check-ins/snacks and compares them with forecasted sums. Forecast rows come from the same linear regressors but aggregated by date.",
         )
-        merged_daily = daily_actuals.merge(
-            daily_forecast,
-            on="date",
-            how="outer",
-            suffixes=("_actual", "_forecast"),
-        ).sort_values("date")
-        if not merged_daily.empty:
-            window_mask = merged_daily["date"] >= (merged_daily["date"].max() - pd.Timedelta(days=10))
-            merged_window = merged_daily[window_mask].copy()
-            merged_window["date"] = merged_window["date"].dt.strftime("%Y-%m-%d")
-            display_cols = [
-                "date",
-                "actual_checkins",
-                "pred_checkins",
-                "actual_snack_units",
-                "pred_snack_units",
-                "actual_snack_revenue",
-                "pred_snack_revenue",
-            ]
-            present_cols = [col for col in display_cols if col in merged_window.columns]
+        # Build a combined table: last 3 actual days + upcoming forecast days, so columns aren't blank.
+        actual_slice = daily_actuals.copy()
+        if not actual_slice.empty:
+            actual_slice = actual_slice.sort_values("date").tail(3)
+            for col in ["pred_checkins", "pred_snack_units", "pred_snack_revenue"]:
+                actual_slice[col] = None
+        forecast_slice = daily_forecast.copy()
+        if not forecast_slice.empty:
+            for col in ["actual_checkins", "actual_snack_units", "actual_snack_revenue"]:
+                forecast_slice[col] = None
+        combined = pd.concat([actual_slice, forecast_slice], ignore_index=True)
+        if not combined.empty:
+            combined = combined.sort_values("date")
+            combined["date"] = pd.to_datetime(combined["date"]).dt.strftime("%Y-%m-%d")
             st.dataframe(
-                merged_window[present_cols].rename(
+                combined[
+                    [
+                        "date",
+                        "actual_checkins",
+                        "pred_checkins",
+                        "actual_snack_units",
+                        "pred_snack_units",
+                        "actual_snack_revenue",
+                        "pred_snack_revenue",
+                    ]
+                ].rename(
                     columns={
                         "date": "Date",
                         "actual_checkins": "Actual check-ins",
@@ -576,39 +697,38 @@ def render_dashboard() -> None:
                 use_container_width=True,
                 height=280,
             )
-        product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
-        if not product_forecast.empty:
-            st.caption("Next 3 days · snack demand split by merchandise plan")
-            hover_tip(
-                "ℹ️ Mix allocation",
-                "Product-level forecast multiplies each day's total snack prediction by its mix weight: units_i = weight_i × total_pred_snacks.",
-            )
-            upcoming_dates = sorted(product_forecast["date"].unique())[:3]
-            product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
-            product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
-            st.dataframe(
-                product_window[
-                    ["date", "product", "forecast_units", "suggested_qty", "weight"]
-                ].rename(
-                    columns={
-                        "date": "Date",
-                        "product": "Product",
-                        "forecast_units": "Forecast units",
-                        "suggested_qty": "Plan units",
-                        "weight": "Mix weight",
-                    }
-                ).style.format({"Forecast units": "{:.0f}", "Plan units": "{:.0f}", "Mix weight": "{:.2f}"}),
-                use_container_width=True,
-                height=280,
-            )
-    st.subheader("What-if forecast")
-    hover_tip(
-        "ℹ️ Forecast math",
-        "Predictions come from two linear regressions: check-ins = β·features, snacks = γ·features (including weather shifts and events). Sliders alter the feature inputs before inference.",
-    )
-    render_forecast_section(data, forecast_df)
-
-
+    product_forecast = allocate_product_level_forecast(daily_forecast, product_mix_df)
+    if not product_forecast.empty:
+        st.caption("Next 3 days · drink demand split by merchandise plan")
+        hover_tip(
+            "ℹ️ Mix allocation",
+            "Each day's total snack forecast is split by the mix weights: "
+            "units_for_item = weight × total predicted snacks.",
+        )
+        upcoming_dates = sorted(product_forecast["date"].unique())[:3]
+        product_window = product_forecast[product_forecast["date"].isin(upcoming_dates)].copy()
+        product_window["date"] = product_window["date"].dt.strftime("%Y-%m-%d")
+        st.dataframe(
+            product_window[
+                ["date", "product", "forecast_units", "suggested_qty", "weight"]
+            ].rename(
+                columns={
+                    "date": "Date",
+                    "product": "Product",
+                    "forecast_units": "Forecast units",
+                    "suggested_qty": "Plan units",
+                    "weight": "Mix weight",
+                }
+            ).style.format(
+                {
+                    "Forecast units": "{:.0f}",
+                    "Plan units": "{:.0f}",
+                    "Mix weight": "{:.2f}",
+                }
+            ),
+            use_container_width=True,
+            height=280,
+        )
 def _safe_render() -> None:
     try:
         render_dashboard()

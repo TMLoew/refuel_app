@@ -28,11 +28,11 @@ st.set_page_config(page_title="Price Manager", page_icon=PAGE_ICON, layout="wide
 
 render_top_nav("8_Price_Manager.py")
 st.title("Price Manager")
-st.caption("Set per-product price points that flow into the dashboard, forecast, and procurement views.")
+st.caption("Edit product prices that feed the dashboard, forecasts, and procurement plan.")
 
 with st.sidebar:
     sidebar_info_block()
-    st.info("Edits here persist to `data/product_prices.csv`.")
+    st.info("Edits here save to `data/product_prices.csv`.")
 
 mix_df = load_product_mix_data()
 price_df = load_product_prices()
@@ -53,7 +53,8 @@ else:
     merged = price_df.copy()
 
 st.subheader("Edit price list")
-st.info("Tip: After adjusting prices, re-run your dashboard/forecast tabs so the new values feed those models.")
+# Grid edits write to product_prices; refresh other tabs after saving to use the new numbers.
+st.info("After changing prices, refresh the dashboard/forecast tabs so they pick up the new values.")
 edited = st.data_editor(
     merged,
     num_rows="dynamic",

@@ -48,6 +48,7 @@ from .weather_pipeline import (
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 # Choose the first gym dataset that exists locally so widgets stay populated.
 PREFERRED_DATASETS = [
+    PROJECT_ROOT / "data" / "gym_checkins_stgallen_2025_patterned.csv",
     PROJECT_ROOT / "data" / "gym_badges_0630_2200_long.csv",
     PROJECT_ROOT / "data" / "gym_badges.csv",
 ]
@@ -74,6 +75,8 @@ DEFAULT_WEATHER_PROFILE = {
     "api_timeout": 10,
     "cache_hours": 6,
 }
+SESSION_COLUMN_MAP = {"cardio_sessions": "treadmill_sessions"}
+SESSION_FALLBACK_COLS = ("treadmill_sessions", "strength_sessions", "other_sessions")
 
 WEATHER_SCENARIOS: Dict[str, Dict[str, float]] = {
     "Temperate & sunny": {"temp_offset": 2.0, "precip_multiplier": 0.7, "humidity_offset": -3},
@@ -155,6 +158,21 @@ def _save_weather_cache(frame: pd.DataFrame) -> None:
     else:
         combined = new_frame
     combined.to_csv(WEATHER_CACHE_FILE, index=False)
+
+
+def _normalize_gym_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Align variant gym CSV schemas to the columns the app expects.
+    Keeps existing columns intact while adding fallbacks for missing session splits.
+    """
+    normalized = df.copy()
+    for source, target in SESSION_COLUMN_MAP.items():
+        if source in normalized.columns and target not in normalized.columns:
+            normalized = normalized.rename(columns={source: target})
+    for col in SESSION_FALLBACK_COLS:
+        if col not in normalized.columns:
+            normalized[col] = 0
+    return normalized
 
 
 @st.cache_data(show_spinner=False)
@@ -240,6 +258,7 @@ def build_enriched_history(
         return pd.DataFrame()
 
     df = pd.read_csv(csv_path)
+    df = _normalize_gym_schema(df)
     if df.empty:
         return df
 
@@ -423,6 +442,11 @@ def build_scenario_forecast(
         except Exception:
             live_weather = pd.DataFrame()
         if not live_weather.empty:
+            live_weather_end = pd.to_datetime(live_weather["timestamp"].max())
+            future.attrs["live_weather_end"] = live_weather_end.isoformat()
+            future.attrs["live_weather_hours"] = int(
+                (live_weather_end - future_index[0]).total_seconds() // 3600 + 1
+            )
             future = future.merge(live_weather, on="timestamp", how="left", suffixes=("", "_live"))
             for col in ["temperature_c", "precipitation_mm", "humidity_pct"]:
                 live_col = f"{col}_live"
@@ -465,6 +489,8 @@ def build_scenario_forecast(
         None,
     )
     future["pred_snack_revenue"] = future["pred_snack_units"] * future["snack_price"]
+    future.attrs["applied_horizon_hours"] = len(future)
+    future.attrs["requested_horizon_hours"] = horizon
     return future
 
 

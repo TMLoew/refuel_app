@@ -7,6 +7,21 @@ import requests
 
 LAT, LON = 47.4245, 9.3767  # St. Gallen
 BASE = "https://api.open-meteo.com/v1/forecast"
+DEFAULT_GYM_PATHS = [
+    Path("data/gym_checkins_stgallen_2025_patterned.csv"),
+    Path("data/gym_badges_0630_2200_long.csv"),
+    Path("data/gym_badges.csv"),
+]
+
+
+def resolve_gym_csv_path(csv_path: str | None) -> Path:
+    """Return the first available gym CSV, preferring the patterned 2025 file."""
+    if csv_path:
+        return Path(csv_path)
+    for candidate in DEFAULT_GYM_PATHS:
+        if candidate.exists():
+            return candidate
+    return DEFAULT_GYM_PATHS[1]
 
 def fetch_weather_hourly(start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
     """Fetch hourly weather (UTC) for St. Gallen from Open-Meteo and return a DataFrame."""
@@ -25,7 +40,7 @@ def fetch_weather_hourly(start_utc: datetime, end_utc: datetime) -> pd.DataFrame
     df["ts_utc"] = pd.to_datetime(df["ts_utc"], utc=True)
     # API responses can overrun; tighten to the exact requested window.
     df = df[(df["ts_utc"] >= start_utc) & (df["ts_utc"] <= end_utc)]
-    # Add Zurich-local timestamps to simplify downstream joins.
+    # add local time columns for easier joins
     df["ts_local"] = df["ts_utc"].dt.tz_convert("Europe/Zurich")
     df["date_local"] = df["ts_local"].dt.date
     df["hour_local"] = df["ts_local"].dt.hour
@@ -42,7 +57,7 @@ def save_latest(hours_back: int = 168) -> str:
     return out
 
 def fetch_full_range(start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
-    """Chunked fetch across long ranges (Open-Meteo limit ~7 days per call)."""
+    """Fetch a long window by chunking calls (API allows ~7 days at once)."""
     frames = []
     cursor = start_utc
     while cursor <= end_utc:
@@ -55,14 +70,14 @@ def fetch_full_range(start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
 
 
 def sync_weather_to_gym_csv(
-    gym_csv_path: str = "data/gym_badges_0630_2200_long.csv",
+    gym_csv_path: str | None = None,
     out_path: str = "data/weather_stgallen_hourly.csv",
     pad_days: int = 2,
 ) -> str:
-    """Align weather file to cover entire gym dataset range."""
-    p = Path(gym_csv_path)
+    """Make sure weather file covers the full gym CSV date range (with padding)."""
+    p = resolve_gym_csv_path(gym_csv_path)
     if not p.exists():
-        raise FileNotFoundError(f"Gym CSV missing: {gym_csv_path}")
+        raise FileNotFoundError(f"Gym CSV missing: {p}")
     first_cols = pd.read_csv(p, nrows=1).columns
     # Support both timezone-aware and naive timestamp columns exported from the gym system.
     ts_col = "ts_local" if "ts_local" in first_cols else "ts_local_naive"

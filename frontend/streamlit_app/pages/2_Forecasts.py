@@ -51,38 +51,42 @@ PAGE_ICON = get_logo_path() or "🔮"
 st.set_page_config(page_title="Forecast Explorer", page_icon=PAGE_ICON, layout="wide")
 
 render_top_nav("2_Forecasts.py")
-st.title("Forecast Explorer")
-st.caption("Dig into the regression models, understand residuals, and inspect sensitivities before committing to a plan.")
+st.title("Forecasts")
+st.caption("See likely visits and snack demand, then publish a simple order plan.")
 
+# Sidebar controls drive the scenario and the forecast horizon.
 with st.sidebar:
     sidebar_info_block()
-    st.subheader("Data slice")
-    use_weather_api = st.toggle("Use live weather API", value=True, key="forecast-weather")
-    lookback_days = st.slider("History window (days)", 3, 14, 7)
-    metric_focus = st.selectbox("Focus metric", ["checkins", "snack_units", "snack_revenue"])
-    weather_profile = st.selectbox("Weather scenario override", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
-    manual_temp_shift = st.slider("Manual temperature shift (°C)", -6, 6, 0, key="forecast-temp-shift")
-    manual_precip_shift = st.slider("Manual precipitation shift (mm)", -2.0, 2.0, 0.0, step=0.1, key="forecast-precip-shift")
-    horizon_hours = st.slider("Forecast horizon (hours)", 6, 72, 48, step=6, key="forecast-horizon")
+    st.subheader("Forecast setup")
+    use_weather_api = st.toggle("Use live weather", value=True, key="forecast-weather", help="Falls back to cached weather if the API is offline.")
+    lookback_days = st.slider("Look at past (days)", 3, 14, 7, help="How many days of history to base the forecast on.")
+    metric_focus = st.selectbox("What to focus on", ["checkins", "snack_units", "snack_revenue"])
+    weather_profile = st.selectbox("Weather type", list(WEATHER_SCENARIOS.keys()), key="forecast-weather-pattern")
+    manual_temp_shift = st.slider("Nudge temperature (°C)", -6, 6, 0, key="forecast-temp-shift")
+    manual_precip_shift = st.slider("Nudge rain (mm)", -2.0, 2.0, 0.0, step=0.1, key="forecast-precip-shift")
+    max_horizon = 168  # allow longer runs; beyond live weather will use historical patterns
+    horizon_hours = st.slider("How far ahead (hours)", 6, max_horizon, 168, step=6, key="forecast-horizon")
     with st.expander("Scenario levers", expanded=True):
-        event_intensity = st.slider("Event intensity", 0.2, 2.5, 1.0, 0.1, key="forecast-event")
-        marketing_boost_pct = st.slider("Marketing boost (%)", 0, 80, 10, 5, key="forecast-marketing")
-        snack_price_change = st.slider("Snack price change (%)", -30, 40, 0, 5, key="forecast-price")
+        event_intensity = st.slider("Expected gym buzz", 0.2, 2.5, 1.0, 0.1, key="forecast-event", help="Higher = busy period, lower = quiet day.")
+        marketing_boost_pct = st.slider("Promo boost (%)", 0, 80, 10, 5, key="forecast-marketing")
+        snack_price_change = st.slider("Price change (%)", -30, 40, 0, 5, key="forecast-price")
     with st.expander("Snacks ↔ visits settings", expanded=False):
         snack_agg_mode = st.radio("Aggregation", ["Hourly", "Daily"], horizontal=True, key="snack-agg")
         color_dim = st.selectbox(
-            "Color points by",
+            "Color chart by",
             ["weekday", "weather_label", "is_weekend"],
             index=0,
             key="snack-color",
         )
-        min_checkins = st.slider("Min. check-ins to include", 0, 50, 5, key="snack-min-checkins")
+        min_checkins = st.slider("Ignore hours under this many visits", 0, 50, 5, key="snack-min-checkins")
+    st.caption("Up to 7 days ahead; forecasts get less reliable the further out you go.")
 
 data = load_enriched_data(use_weather_api=use_weather_api)
 if data.empty:
-    st.error("No telemetry CSV detected. Upload data via the Data Editor page first.")
+    st.error("No data found. Upload a telemetry CSV in the Data Workbench first.")
     st.stop()
 
+# Train or load models, then prep mixes and prices for scenario exports.
 models = train_models(data)
 product_mix_df = load_product_mix_data()
 restock_policy = load_restock_policy()
@@ -92,6 +96,7 @@ latest_ts = data["timestamp"].max()
 history = data[data["timestamp"] >= latest_ts - pd.Timedelta(days=lookback_days)]
 scenario = WEATHER_SCENARIOS[weather_profile]
 scenario_history = history.copy()
+# Nudge history copy to reflect the chosen weather story (for charts and tables).
 scenario_history["temperature_c"] += scenario["temp_offset"] + manual_temp_shift
 scenario_history["precipitation_mm"] = np.clip(
     scenario_history["precipitation_mm"] * scenario["precip_multiplier"] + manual_precip_shift,
@@ -107,9 +112,7 @@ demand_factor = 1 + 0.015 * (scenario["temp_offset"] + manual_temp_shift) - 0.05
 visit_factor = 1 + 0.01 * (scenario["temp_offset"] + manual_temp_shift) - 0.04 * (scenario["precip_multiplier"] - 1)
 scenario_history["snack_units"] = np.clip(scenario_history["snack_units"] * demand_factor, 0, None)
 scenario_history["checkins"] = np.clip(scenario_history["checkins"] * visit_factor, 0, None)
-st.caption(
-    f"Applied '{weather_profile}' scenario with temperature shift {manual_temp_shift:+}°C across the analysis views."
-)
+st.caption(f"Using the '{weather_profile}' weather type with simple temp/rain nudges.")
 
 scenario_config = {
     "horizon_hours": horizon_hours,
@@ -122,7 +125,10 @@ scenario_config = {
     "use_live_weather": use_weather_api,
 }
 forecast_df = build_scenario_forecast(data, models, scenario_config)
+applied_horizon = forecast_df.attrs.get("applied_horizon_hours", horizon_hours) if not forecast_df.empty else 0
+live_weather_hours = forecast_df.attrs.get("live_weather_hours")
 
+# Quick KPIs before charts.
 col_a, col_b, col_c = st.columns(3)
 col_a.metric("Latest check-ins/hr", f"{scenario_history['checkins'].iloc[-1]:.0f}")
 col_b.metric("Snack revenue (24h)", f"CHF{scenario_history.tail(24)['snack_revenue'].sum():.0f}")
@@ -132,12 +138,16 @@ st.divider()
 if forecast_df.empty:
     st.warning("Need more telemetry to compute the forward forecast. Upload additional history first.")
 else:
-    st.subheader(f"Scenario forecast · next {horizon_hours} hours")
+# Main forecast chart with history + future overlay.
+    if use_weather_api and live_weather_hours:
+        st.caption(f"Live weather for the first {live_weather_hours} hours; after that we extend using past patterns.")
+    st.subheader(f"Forecast for the next {applied_horizon} hours")
     hover_tip(
-        "ℹ️ Regression math",
-        "Forecast lines come from two linear regressions: check-ins = β·features, snacks = γ·features. Slider tweaks shift the feature inputs before inference.",
+        "How this works",
+        "We look at past visits, snacks, prices, and weather. The sliders tweak those inputs to show what could happen next.",
     )
-    history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=horizon_hours + 24)][
+    st.caption("Later hours are lower confidence; near-term rows lean on actual and live weather data first.")
+    history_window = data[data["timestamp"] >= data["timestamp"].max() - pd.Timedelta(hours=applied_horizon + 24)][
         ["timestamp", "checkins", "snack_units"]
     ].copy()
     history_window.rename(
@@ -186,6 +196,7 @@ else:
         )
     )
     forecast_fig.update_layout(
+        title=f"Forecast window: next {applied_horizon} hours",
         xaxis_title="Timestamp",
         yaxis_title="Check-ins",
         yaxis2=dict(title="Snack units", overlaying="y", side="right"),
@@ -208,6 +219,7 @@ else:
     st.plotly_chart(forecast_fig, use_container_width=True)
 
     dl_col, stat_col = st.columns([1, 1])
+    # Export raw forecast and show total units at a glance.
     csv_bytes = forecast_df.to_csv(index=False).encode("utf-8")
     dl_col.download_button(
         "⬇️ Download forecast CSV",
@@ -222,10 +234,10 @@ else:
     if not daily_forecast.empty:
         st.subheader("Daily rollup & product mix impact")
         hover_tip(
-            "ℹ️ Daily aggregation math",
-            "Hourly predictions are summed per calendar day, then multiplied by each product's mix weight to allocate SKU-level units.",
+            "ℹ️ Daily math",
+            "Hourly predictions are summed per day, then split by mix weights to estimate units per product.",
         )
-        st.caption("Merges the scenario forecast with the merchandising guidance.")
+        st.caption("Joins the scenario forecast with the merch plan.")
         st.dataframe(
             daily_forecast.assign(date=daily_forecast["date"].dt.strftime("%Y-%m-%d"))[
                 ["date", "pred_checkins", "pred_snack_units", "pred_snack_revenue"]
@@ -293,15 +305,15 @@ else:
         else "Auto restock OFF · configure on the POS Console to automate stock protection."
     )
     st.info(
-        f"{auto_caption} · This scenario expects {total_units:.0f} snack units over the next {horizon_hours} hours.",
+        f"{auto_caption} · This scenario expects {total_units:.0f} snack units over the next {applied_horizon} hours.",
         icon="ℹ️",
     )
     if 'plan_payload' in locals() and not plan_payload.empty:
         with st.expander("Procurement actions", expanded=True):
-            st.caption("Push this scenario into the shared procurement plan for downstream tabs.")
+            st.caption("Send this plan to the shared procurement file.")
             hover_tip(
-                "ℹ️ Plan math",
-                "The exported CSV includes daily forecast units plus the scenario metadata (weather and price shifts) so downstream tabs can reproduce the assumptions.",
+                "What gets saved",
+                "We save the daily totals, product suggestions, and the scenario choices you set.",
             )
             generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             last_plan = load_procurement_plan()
@@ -314,7 +326,7 @@ else:
                 "plan_generated_at": generated_at,
                 "plan_source": "Forecast Explorer",
                 "plan_weather_pattern": weather_profile,
-                "plan_horizon_hours": f"{horizon_hours}",
+                "plan_horizon_hours": f"{applied_horizon}",
                 "plan_temp_manual": f"{manual_temp_shift}",
                 "plan_precip_manual": f"{manual_precip_shift}",
                 "plan_event_intensity": f"{event_intensity}",
@@ -333,6 +345,7 @@ else:
             )
             publish = st.button("Publish scenario to procurement plan", use_container_width=True)
             if publish:
+                # Persist the scenario plan so other pages (e.g., Settings, Data Workbench) can load it.
                 plan_copy = plan_payload.copy()
                 plan_copy["date"] = pd.to_datetime(plan_copy["date"])
                 for key, value in scenario_metadata.items():
@@ -382,7 +395,7 @@ corr_fig = px.imshow(
     text_auto=".2f",
     aspect="auto",
     color_continuous_scale="RdBu",
-    title="Correlation matrix: weather vs. demand",
+    title="How weather links to demand",
 )
 st.plotly_chart(corr_fig, use_container_width=True)
 
@@ -400,8 +413,8 @@ snack_df = snack_df[snack_df["checkins"] >= min_checkins]
 if not snack_df.empty:
     corr_value = snack_df["checkins"].corr(snack_df["snack_units"])
     st.subheader("Snack demand vs. visit load")
-    st.caption("Tune the controls in the sidebar to slice the correlation by aggregation or filters.")
-    st.metric("Pearson correlation", f"{corr_value:.2f}" if not pd.isna(corr_value) else "n/a")
+    st.caption("Adjust sidebar options to see how snacks and visits move together.")
+    st.metric("Correlation (snacks vs visits)", f"{corr_value:.2f}" if not pd.isna(corr_value) else "n/a")
     color_field = color_dim if color_dim in snack_df.columns else None
     scatter_fig = px.scatter(
         snack_df,
@@ -418,6 +431,7 @@ if not snack_df.empty:
 # --- Feature sensitivity --------------------------------------------------------
 checkin_model, snack_model = models
 if checkin_model is not None:
+    # Show which inputs the model leans on most.
     model_core = checkin_model.named_steps.get("model", checkin_model) if isinstance(checkin_model, Pipeline) else checkin_model
     importances = getattr(model_core, "feature_importances_", None)
     value_label = "importance"
@@ -437,13 +451,14 @@ if checkin_model is not None:
             orientation="h",
             color=value_label,
             color_continuous_scale="RdBu",
-            title="Model feature influence",
+            title="Which inputs matter most",
         )
         impact_fig.update_layout(coloraxis_showscale=False)
         st.plotly_chart(impact_fig, use_container_width=True)
 
 # --- Residual diagnostics -------------------------------------------------------
 if checkin_model is not None:
+    # Quick residual plot to spot bias vs. temperature.
     feature_df = scenario_history.copy()
     feature_df["residuals_checkins"] = feature_df["checkins"] - checkin_model.predict(
         feature_df[CHECKIN_FEATURES]
@@ -453,7 +468,7 @@ if checkin_model is not None:
         x="temperature_c",
         y="residuals_checkins",
         color="weather_label",
-        title="Residuals vs. temperature",
+        title="Prediction errors vs. temperature",
         trendline="ols",
         labels={"residuals_checkins": "Residual (actual - predicted)"},
     )
