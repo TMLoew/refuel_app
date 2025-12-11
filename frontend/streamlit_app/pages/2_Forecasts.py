@@ -228,7 +228,7 @@ else:
         mime="text/csv",
     )
     total_units = forecast_df["pred_snack_units"].sum()
-    stat_col.metric("Total snacks forecast", f"{total_units:.0f} units", f"{forecast_df['pred_snack_units'].mean():.1f}/hr")
+    stat_col.metric("Total units forecast", f"{total_units:.0f} units", f"{forecast_df['pred_snack_units'].mean():.1f}/hr")
 
     daily_forecast = build_daily_forecast(forecast_df)
     if not daily_forecast.empty:
@@ -245,7 +245,7 @@ else:
                 columns={
                     "date": "Date",
                     "pred_checkins": "Forecast check-ins",
-                    "pred_snack_units": "Forecast snacks",
+                    "pred_snack_units": "Forecast units",
                     "pred_snack_revenue": "Forecast revenue (CHF)",
                 }
             ),
